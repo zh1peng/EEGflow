@@ -1,9 +1,11 @@
-function ctx = select_conditions(ctx, args, ~)
+function state = select_conditions(state, args, ~)
     % Args: conditions (cell)
-    ctx_check(ctx);
+    state_check(state);
     conds = args.conditions;
-    miss = setdiff(conds, ctx.Dataset.conditions);
-    if ~isempty(miss), warning('Missing conditions ignored: %s', strjoin(miss, ', ')); end
-    ctx.Selection.Conditions = intersect(conds, ctx.Dataset.conditions);
-    fprintf('Selected %d conditions.\n', numel(ctx.Selection.Conditions));
+    miss = setdiff(conds, state.Dataset.conditions);
+    if ~isempty(miss)
+        warning('Missing conditions ignored: %s', strjoin(miss, ', '));
+    end
+    state.Selection.Conditions = intersect(conds, state.Dataset.conditions);
+    fprintf('Selected %d conditions.\n', numel(state.Selection.Conditions));
 end

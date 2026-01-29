@@ -1,6 +1,6 @@
-function setup()
+function setup_env()
 %SETUP Verify environment variables and add paths
-    required_vars = {'EEGDOJO_ROOT', 'EEGLAB_ROOT', 'FASTER_ROOT'};
+    required_vars = {'EEGFLOW_ROOT', 'EEGLAB_ROOT', 'FASTER_ROOT'};
 
     for i = 1:numel(required_vars)
         varName = required_vars{i};
@@ -14,6 +14,6 @@ function setup()
     end
 
     % Ensure the output folder exists (optional convention)
-    outDir = fullfile(getenv('EEGDOJO_ROOT'), 'output');
+    outDir = fullfile(getenv('EEGFLOW_ROOT'), 'output');
     if ~isfolder(outDir), mkdir(outDir); end
 end
