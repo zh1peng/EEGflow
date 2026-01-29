@@ -7,30 +7,30 @@ function reg = init_registry()
     reg = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
     % 2. Define Layout: 'OpName' -> @WrapperFunction
-    % Note: Wrapper functions are in the +prep_ctx package
+    % Note: Wrapper functions are in the +prep package
 
     % --- I/O Operations ---
-    register(reg, 'load_set',            @prep_ctx.load_set);
-    register(reg, 'load_mff',            @prep_ctx.load_mff);
-    register(reg, 'save_set',            @prep_ctx.save_set);
+    register(reg, 'load_set',            @prep.load_set);
+    register(reg, 'load_mff',            @prep.load_mff);
+    register(reg, 'save_set',            @prep.save_set);
 
     % --- Preprocessing Operations ---
-    register(reg, 'select_channels',     @prep_ctx.select_channels);
-    register(reg, 'remove_channels',     @prep_ctx.remove_channels);
-    register(reg, 'downsample',          @prep_ctx.downsample);
-    register(reg, 'filter',              @prep_ctx.filter);
-    register(reg, 'remove_powerline',    @prep_ctx.remove_powerline);
-    register(reg, 'crop_by_markers',     @prep_ctx.crop_by_markers);
-    register(reg, 'insert_relative_markers', @prep_ctx.insert_relative_markers);
-    register(reg, 'correct_baseline',    @prep_ctx.correct_baseline);
-    register(reg, 'remove_bad_channels', @prep_ctx.remove_bad_channels);
-    register(reg, 'interpolate',         @prep_ctx.interpolate);
-    register(reg, 'interpolate_bad_channels_epoch', @prep_ctx.interpolate_bad_channels_epoch);
-    register(reg, 'reref',               @prep_ctx.reref);
-    register(reg, 'remove_bad_epoch',    @prep_ctx.remove_bad_epoch);
-    register(reg, 'remove_bad_ICs',      @prep_ctx.remove_bad_ICs);
-    register(reg, 'segment_task',        @prep_ctx.segment_task);
-    register(reg, 'segment_rest',        @prep_ctx.segment_rest);
+    register(reg, 'select_channels',     @prep.select_channels);
+    register(reg, 'remove_channels',     @prep.remove_channels);
+    register(reg, 'downsample',          @prep.downsample);
+    register(reg, 'filter',              @prep.filter);
+    register(reg, 'remove_powerline',    @prep.remove_powerline);
+    register(reg, 'crop_by_markers',     @prep.crop_by_markers);
+    register(reg, 'insert_relative_markers', @prep.insert_relative_markers);
+    register(reg, 'correct_baseline',    @prep.correct_baseline);
+    register(reg, 'remove_bad_channels', @prep.remove_bad_channels);
+    register(reg, 'interpolate',         @prep.interpolate);
+    register(reg, 'interpolate_bad_channels_epoch', @prep.interpolate_bad_channels_epoch);
+    register(reg, 'reref',               @prep.reref);
+    register(reg, 'remove_bad_epoch',    @prep.remove_bad_epoch);
+    register(reg, 'remove_bad_ICs',      @prep.remove_bad_ICs);
+    register(reg, 'segment_task',        @prep.segment_task);
+    register(reg, 'segment_rest',        @prep.segment_rest);
 
     % 3. (Optional) Register Aliases for LLM robustness
     % LLM sometimes hallucinates "prep.filter" instead of just "filter"
