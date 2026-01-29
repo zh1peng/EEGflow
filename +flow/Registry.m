@@ -1,25 +1,12 @@
-function reg = Registry(varargin)
+function reg = Registry()
 %REGISTRY Initialize EEGflow operation registry.
 % Usage:
-%   reg = flow.Registry();                  % all modules
-%   reg = flow.Registry('prep');            % only prep ops
-%   reg = flow.Registry('analysis');        % only analysis ops
-%   reg = flow.Registry('modules', {...});  % explicit list
-
-    modules = parse_modules(varargin{:});
+%   reg = flow.Registry();                  % all ops
 
     reg = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
-    for i = 1:numel(modules)
-        switch modules{i}
-            case 'prep'
-                register_prep(reg);
-            case 'analysis'
-                register_analysis(reg);
-            otherwise
-                error('Registry:BadModule', 'Unknown module "%s".', modules{i});
-        end
-    end
+    register_prep(reg);
+    register_analysis(reg);
 
     % Optional aliases for LLM robustness (e.g., "prep.filter")
     keys = reg.keys();
@@ -28,14 +15,15 @@ function reg = Registry(varargin)
         if ~isempty(strfind(shortKey, '.'))
             continue;
         end
-        for j = 1:numel(modules)
-            longKey = [modules{j} '.' shortKey];
-            if ~reg.isKey(longKey)
-                reg(longKey) = reg(shortKey);
-            end
+        longKey = ['prep.' shortKey];
+        if ~reg.isKey(longKey)
+            reg(longKey) = reg(shortKey);
+        end
+        longKey = ['analysis.' shortKey];
+        if ~reg.isKey(longKey)
+            reg(longKey) = reg(shortKey);
         end
     end
 
-    fprintf('Registry initialized with %d operations (modules: %s).\n', ...
-        reg.Count, strjoin(modules, ','));
+    fprintf('Registry initialized with %d operations.\n', reg.Count);
 end
