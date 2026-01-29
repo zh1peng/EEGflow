@@ -1,64 +1,75 @@
-function [EEG, out] = reref(EEG, varargin)
-% REREF  Re-references EEG data to the average reference.
-%   This function re-references the EEG data to the average of all channels.
-%   Optionally, specific channels can be excluded from the average calculation
-%   (e.g., EOG channels or known bad channels).
+﻿function state = reref(state, args, meta)
+%REREF Re-reference state.EEG to average reference.
 %
-% Syntax:
-%   [EEG, out] = prep.reref(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Uses pop_reref to compute an average reference across channels, with
+%   optional exclusion of specific labels (e.g., EOG).
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (re-referenced)
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'excludeLabels' - (cell array of strings | string, default: {})
-%                     A cell array of channel labels (e.g., {'EOG1', 'EOG2'})
-%                     or a single string label to exclude from the average
-%                     reference calculation. These channels will still be
-%                     present in the output EEG structure but will not
-%                     contribute to the average.
-%   'LogFile'       - (char | string, default: '')
-%                     Path to a log file for verbose output. If empty, output
-%                     is directed to the command window.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.reref if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with data re-referenced.
-%   out         - Structure containing details of the re-referencing:
-%                 out.excluded_labels: Cell array of channel labels that were
-%                                      excluded from the average reference.
+% Parameters
+%   - ExcludeLabel
+%       Type: char|string; Default: {}
+%       Labels to exclude from the average reference computation.
+%   - LogFile
+%       Type: char; Default: ''
+%       Optional log file path.
+% Example args
+%   args = struct('ExcludeLabel', {});
 %
-% Examples:
-%   % Example 1: Re-reference to average, excluding EOG channels (without pipeline)
-%   % Load an EEG dataset first, e.g., EEG = pop_loadset('eeg_data.set');
-%   [EEG_reref, reref_info] = prep.reref(EEG, ...
-%       'excludeLabels', {'VEOG', 'HEOG'}, ...
-%       'LogFile', 'reref_log.txt');
-%   disp('EEG data re-referenced to average, excluding EOG channels.');
-%   disp(['Excluded channels: ', strjoin(reref_info.excluded_labels, ', ')]);
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-%   % Example 2: Re-reference to average (with pipeline)
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.reref, ...
-%       'LogFile', p.LogFile); %% p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('EEG data re-referenced to average.');
+% Side effects
+%   state.EEG updated; history includes excluded labels.
 %
-% See also: pop_reref
+% Usage
+%   state = prep.reref(state, struct('ExcludeLabel',{'VEOG','HEOG'}));
+%
+% See also: pop_reref, eeg_checkset
+
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'reref';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
 
     p = inputParser;
     p.addRequired('EEG', @isstruct);
-    p.addParameter('ExcludeLabel', {}, @(x) iscell(x) || ischar(x));
+    p.addParameter('ExcludeLabel', {}, @(x) iscell(x) || ischar(x) || isstring(x));
     p.addParameter('LogFile', '', @ischar);
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize out struct
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
+
+    out = struct();
     out.excluded_labels = R.ExcludeLabel;
 
-
-    if ischar(R.ExcludeLabel)
-        excludeLabels = {R.ExcludeLabel};
+    if ischar(R.ExcludeLabel) || isstring(R.ExcludeLabel)
+        excludeLabels = cellstr(R.ExcludeLabel);
     else
         excludeLabels = R.ExcludeLabel;
     end
@@ -71,16 +82,16 @@ function [EEG, out] = reref(EEG, varargin)
 
     if isempty(excludeLabels)
         logPrint(R.LogFile, '[reref] Applying average reference to all channels.');
-        EEG = pop_reref(EEG, []);
+        state.EEG = pop_reref(state.EEG, []);
     else
-        labels = {EEG.chanlocs.labels};
+        labels = {state.EEG.chanlocs.labels};
         excludeIdx = find(ismember(labels, excludeLabels));
         logPrint(R.LogFile, sprintf('[reref] Applying average reference, excluding %d channels.', length(excludeIdx)));
-        EEG = pop_reref(EEG, [], 'exclude', excludeIdx);
+        state.EEG = pop_reref(state.EEG, [], 'exclude', excludeIdx);
     end
 
-    EEG = eeg_checkset(EEG);
-
+    state.EEG = eeg_checkset(state.EEG);
     logPrint(R.LogFile, '[reref] Re-referencing complete.');
 
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

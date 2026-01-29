@@ -1,129 +1,149 @@
-function [EEG, out] = remove_bad_channels(EEG, varargin)
-% REMOVE_BAD_CHANNELS  Detects and removes/flags bad EEG channels using various methods.
-%   This function provides a modular approach to identify bad channels based on
-%   EEGLAB's `pop_rejchan` (kurtosis, probability, spectrum), FASTER (mean
-%   correlation, variance, Hurst exponent), and CleanRaw (flatline, noise)
-%   algorithms. It can either remove the identified bad channels from the EEG
-%   dataset or flag them by adding a mask to `EEG.etc.clean_channel_mask`.
+﻿function state = remove_bad_channels(state, args, meta)
+%REMOVE_BAD_CHANNELS Detect and remove/flag bad channels in state.EEG.
 %
-% Syntax:
-%   [EEG, out] = prep.remove_bad_channels(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Runs one or more detectors (EEGLAB pop_rejchan, FASTER, CleanRaw) to
+%   identify bad channels, then removes or flags them. Results are stored in
+%   EEG.etc.EEGdojo and returned via history metrics.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (channels removed or flags added)
+%     - state.EEG.etc.EEGdojo.BadChan*
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'ExcludeLabel'      - (cell array of strings, default: {})
-%                         Labels of channels to exclude from bad channel detection.
-%   'Action'            - (char | string, 'remove' | 'flag', default: 'remove')
-%                         'remove': Removes bad channels from the dataset.
-%                         'flag': Adds a mask to EEG.etc.clean_channel_mask
-%                                 indicating good (true) and bad (false) channels.
-%   'LogPath'           - (char | string, default: pwd)
-%                         Path to save log plots and reports.
-%   'LogFile'           - (char | string, default: '')
-%                         Base name for the log report file.
-%   'KnownBadLabel'     - (cell array of strings, default: [])
-%                         Labels of channels already known to be bad. These will
-%                         be included in the final list of bad channels.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.remove_bad_channels if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-%   %% Classic EEGLAB detectors (pop_rejchan)
-%   'Kurtosis'          - (logical, default: false)
-%                         Enable kurtosis-based channel rejection.
-%   'Kurt_Threshold'    - (numeric, default: 5)
-%                         Threshold for kurtosis.
-%   'Probability'       - (logical, default: false)
-%                         Enable probability-based channel rejection.
-%   'Prob_Threshold'    - (numeric, default: 5)
-%                         Threshold for probability.
-%   'Spectrum'          - (logical, default: false)
-%                         Enable spectrum-based channel rejection.
-%   'Spec_Threshold'    - (numeric, default: 5)
-%                         Threshold for spectrum.
-%   'Spec_FreqRange'    - (numeric array [min_freq max_freq], default: [1 50])
-%                         Frequency range for spectrum analysis.
-%   'NormOn'            - (char | string, 'on' | 'off', default: 'on')
-%                         Normalize measures ('on' or 'off') for pop_rejchan.
+% Parameters
+%   - ExcludeLabel
+%       Type: cellstr|char|string; Default: {}
+%       Channels excluded from detection.
+%   - Action
+%       Type: char|string; Default: 'remove'; Options: remove, flag
+%       'remove' drops channels; 'flag' sets EEG.etc.clean_channel_mask.
+%   - LogPath
+%       Type: char|string; Default: ''
+%       Folder for plots/reports.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Log file path.
+%   - KnownBadLabel
+%       Type: numeric; Default: []
+%       Channels known to be bad (included in final list).
+%   - Kurtosis
+%       Type: logical; Default: false
+%       Enable kurtosis-based detector.
+%   - Kurt_Threshold
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 5
+%       Threshold parameter for Kurt_.
+%   - Probability
+%       Type: logical; Default: false
+%       Enable probability-based detector.
+%   - Prob_Threshold
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 5
+%       Threshold parameter for Prob_.
+%   - Spectrum
+%       Type: logical; Default: false
+%       Enable spectrum-based detector.
+%   - Spec_Threshold
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 5
+%       Threshold parameter for Spec_.
+%   - Spec_FreqRange
+%       Type: numeric; Shape: length 2; Range: >= 0; Default: [1 50]
+%       Frequency range [min max] for spectrum detector.
+%   - NormOn
+%       Type: char|string; Default: 'on'; Options: on, off
+%       Normalization mode for detector (on/off).
+%   - FASTER_MeanCorr
+%       Type: logical; Default: false
+%       FASTER parameter: MeanCorr
+%   - FASTER_Threshold
+%       Type: numeric; Default: 0.4
+%       Threshold parameter for FASTER_.
+%   - FASTER_RefChan
+%       Type: numeric; Shape: scalar; Default: []
+%       FASTER parameter: RefChan
+%   - FASTER_Bandpass
+%       Type: numeric; Shape: length 2; Default: []
+%       FASTER parameter: Bandpass
+%   - FASTER_Variance
+%       Type: logical; Default: false
+%       FASTER parameter: Variance
+%   - FASTER_VarThreshold
+%       Type: numeric; Default: 3
+%       Threshold parameter for FASTER_Va.
+%   - FASTER_Hurst
+%       Type: logical; Default: false
+%       FASTER parameter: Hurst
+%   - FASTER_HurstThreshold
+%       Type: numeric; Default: 3
+%       Threshold parameter for FASTER_Hurst.
+%   - CleanRaw_Flatline
+%       Type: logical; Default: false
+%       CleanRaw parameter: Flatline
+%   - Flatline_Sec
+%       Type: numeric; Shape: scalar; Range: >= 0; Default: 5
+%       Parameter for this operation.
+%   - CleanDrift_Band
+%       Type: numeric; Shape: length 2; Default: [0.25 0.75]
+%       Parameter for this operation.
+%   - CleanRaw_Noise
+%       Type: logical; Default: false
+%       CleanRaw parameter: Noise
+%   - CleanChan_Corr
+%       Type: numeric; Default: 0.8
+%       CleanRaw channel parameter: Corr
+%   - CleanChan_Line
+%       Type: numeric; Default: 4
+%       CleanRaw channel parameter: Line
+%   - CleanChan_MaxBad
+%       Type: numeric; Shape: scalar; Range: >= 0, <= 1; Default: 0.5
+%       CleanRaw channel parameter: MaxBad
+%   - CleanChan_NSamp
+%       Type: numeric; Default: 50
+%       CleanRaw channel parameter: NSamp
+% Example args
+%   args = struct('Action','remove','Kurtosis',true,'Kurt_Threshold',5,'Probability',false,'Spectrum',false,'Spec_FreqRange',[1 50],...
+%                'FASTER_MeanCorr',false,'CleanRaw_Flatline',false,'CleanRaw_Noise',false);
 %
-%   %% FASTER detectors (FASTER_rejchan)
-%   'FASTER_MeanCorr'   - (logical, default: false)
-%                         Enable FASTER mean correlation rejection.
-%   'FASTER_Threshold'  - (numeric, default: 0.4)
-%                         Threshold for FASTER mean correlation.
-%   'FASTER_RefChan'    - (numeric, default: [])
-%                         Reference channel index for FASTER methods.
-%   'FASTER_Bandpass'   - (numeric array [low_freq high_freq], default: [])
-%                         Bandpass filter for FASTER methods.
-%   'FASTER_Variance'   - (logical, default: false)
-%                         Enable FASTER variance rejection.
-%   'FASTER_VarThreshold'- (numeric, default: 3)
-%                         Threshold for FASTER variance.
-%   'FASTER_Hurst'      - (logical, default: false)
-%                         Enable FASTER Hurst exponent rejection.
-%   'FASTER_HurstThreshold'- (numeric, default: 3)
-%                         Threshold for FASTER Hurst exponent.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-%   %% CleanRaw detectors (cleanraw_rejchan)
-%   'CleanRaw_Flatline' - (logical, default: false)
-%                         Enable CleanRaw flatline rejection.
-%   'Flatline_Sec'      - (numeric, default: 5)
-%                         Minimum flatline duration in seconds.
-%   'CleanDrift_Band'   - (numeric array [low_freq high_freq], default: [0.25 0.75])
-%                         Highpass filter band for CleanRaw methods.
-%   'CleanRaw_Noise'    - (logical, default: false)
-%                         Enable CleanRaw noise rejection (channel correlation).
-%   'CleanChan_Corr'    - (numeric, default: 0.8)
-%                         Correlation threshold for CleanRaw noise.
-%   'CleanChan_Line'    - (numeric, default: 4)
-%                         Line noise threshold for CleanRaw noise.
-%   'CleanChan_MaxBad'  - (numeric, default: 0.5)
-%                         Maximum proportion of bad time points for CleanRaw noise.
-%   'CleanChan_NSamp'   - (numeric, default: 50)
-%                         Number of samples for CleanRaw noise.
+% Side effects
+%   state.EEG updated; history includes Bad/summary/detectors_used.
+%   May write plots/reports to LogPath.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with bad channels removed or flagged.
-%   out         - Structure containing details of the detection:
-%                 out.Bad: Structure with indices of bad channels per detector.
-%                 out.Bad.all: Combined unique indices of all bad channels.
-%                 out.summary: Summary of bad channels per detector and total.
-%                 out.detectors_used: Cell array of detector names used.
-%                 out.IdxDetect: Indices of channels considered for detection.
+% Usage
+%   state = prep.remove_bad_channels(state, struct('Kurtosis',true,'Kurt_Threshold',5));
+%   state = prep.remove_bad_channels(state, struct('Action','flag','FASTER_MeanCorr',true));
 %
-% Examples:
-%   % Example 1: Remove bad channels using Kurtosis and Probability (without pipeline)
-%   % Load an EEG dataset first, e.g., EEG = pop_loadset('eeg_data.set');
-%   [EEG_cleaned, bad_chan_info] = prep.remove_bad_channels(EEG, ...
-%       'Kurtosis', true, 'Kurt_Threshold', 5, ...
-%       'Probability', true, 'Prob_Threshold', 5, ...
-%       'LogPath', 'C:\temp\eeg_logs', 'LogFile', 'bad_channels_report');
-%   disp('Bad channels removed:');
-%   disp(bad_chan_info.Bad.all);
-%
-%   % Example 2: Flag bad channels using FASTER Mean Correlation (with pipeline)
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.remove_bad_channels, ...
-%       'Action', 'flag', ...
-%       'FASTER_MeanCorr', true, 'FASTER_Threshold', 0.3, ...
-%       'LogPath', 'C:\temp\eeg_logs', 'LogFile', 'flagged_channels_report');
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   % The flagged channels will be in EEG_processed.etc.clean_channel_mask
-%
-% See also: pop_rejchan, FASTER_rejchan, cleanraw_rejchan, logplot_badchannels, logreport_badchannels
+% See also: pop_rejchan, FASTER_rejchan, cleanraw_rejchan, logplot_badchannels
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'remove_bad_channels';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
-
-    % Scope, I/O, and action parameters
     p.addParameter('ExcludeLabel',      {}, @(x) iscellstr(x) || ischar(x) || isstring(x));
     p.addParameter('Action',            'remove', @(s) any(strcmpi(s,{'remove','flag'})));
     p.addParameter('LogPath',           '', @(s) ischar(s) || isstring(s));
     p.addParameter('LogFile',           '', @(s) ischar(s) || isstring(s));
     p.addParameter('KnownBadLabel',       [], @(x) isempty(x) || isnumeric(x));
-    
 
-    % Classic EEGLAB detectors
     p.addParameter('Kurtosis',          false, @islogical);
     p.addParameter('Kurt_Threshold',    5, @(x)isnumeric(x)&&isscalar(x)&&x>0);
     p.addParameter('Probability',       false, @islogical);
@@ -133,7 +153,6 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
     p.addParameter('Spec_FreqRange',    [1 50], @(x)isnumeric(x)&&numel(x)==2&&all(x>=0));
     p.addParameter('NormOn',            'on', @(x) any(strcmpi(x,{'on','off'})));
 
-    % FASTER detectors
     p.addParameter('FASTER_MeanCorr',     false, @islogical);
     p.addParameter('FASTER_Threshold',    0.4, @isnumeric);
     p.addParameter('FASTER_RefChan',      [], @(x) isempty(x) || (isscalar(x)&&isnumeric(x)));
@@ -143,7 +162,6 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
     p.addParameter('FASTER_Hurst',        false, @islogical);
     p.addParameter('FASTER_HurstThreshold', 3, @isnumeric);
 
-    % CleanRaw detectors
     p.addParameter('CleanRaw_Flatline', false, @islogical);
     p.addParameter('Flatline_Sec',      5, @(x)isnumeric(x)&&isscalar(x)&&x>=0);
     p.addParameter('CleanDrift_Band',   [0.25 0.75], @(x) isempty(x) || (isnumeric(x)&&numel(x)==2));
@@ -153,14 +171,19 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
     p.addParameter('CleanChan_MaxBad',  0.5, @(x)isnumeric(x)&&isscalar(x)&&x>=0&&x<=1);
     p.addParameter('CleanChan_NSamp',   50, @isnumeric);
 
-    p.parse(EEG, varargin{:});
+    nv = state_struct2nv(params);
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize out struct
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
+    EEG = state.EEG;
+    out = struct();
 
-    % ----------------- Initial Setup -----------------
-    % Exclude specified channels from detection
     if ~isempty(R.ExcludeLabel)
         excludeIdx = chans2idx(EEG, R.ExcludeLabel);
         IdxDetect = setdiff(1:EEG.nbchan, excludeIdx);
@@ -173,16 +196,13 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
     else
         KnownBadIdx = [];
     end
-    
 
-    if ~exist(R.LogPath,'dir')&~isempty(R.LogPath), mkdir(R.LogPath); end
+    if ~exist(R.LogPath,'dir') && ~isempty(R.LogPath), mkdir(R.LogPath); end
 
-    % Preserve original channel locations
     EEG.urchanlocs=[];
     [EEG.urchanlocs] = deal(EEG.chanlocs);
     EEG.chaninfo.nodatchans = [];
 
-    % ----------------- Run Detectors -----------------
     Bad  = struct();
     used = {};
 
@@ -218,10 +238,10 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
 
     if R.FASTER_MeanCorr
         logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Mean Correlation detector...');
-        args = {'elec', IdxDetect, 'measure','meanCorr', 'threshold', R.FASTER_Threshold};
-        if ~isempty(R.FASTER_RefChan), args = [args, {'refchan', R.FASTER_RefChan}]; end
-        if ~isempty(R.FASTER_Bandpass), args = [args, {'bandpass', R.FASTER_Bandpass}]; end
-        [~, idx] = FASTER_rejchan(EEG, args{:});
+        args2 = {'elec', IdxDetect, 'measure','meanCorr', 'threshold', R.FASTER_Threshold};
+        if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
+        if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
+        [~, idx] = FASTER_rejchan(EEG, args2{:});
         if ~isempty(R.FASTER_RefChan), idx = setdiff(idx, R.FASTER_RefChan); end
         Bad.MeanCorr = idx(:)';
         used{end+1} = 'FASTER_MeanCorr';
@@ -232,10 +252,10 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
 
     if R.FASTER_Variance
         logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Variance detector...');
-        args = {'elec', IdxDetect, 'measure','variance', 'threshold', R.FASTER_VarThreshold};
-        if ~isempty(R.FASTER_RefChan), args = [args, {'refchan', R.FASTER_RefChan}]; end
-        if ~isempty(R.FASTER_Bandpass), args = [args, {'bandpass', R.FASTER_Bandpass}]; end
-        [~, idx] = FASTER_rejchan(EEG, args{:});
+        args2 = {'elec', IdxDetect, 'measure','variance', 'threshold', R.FASTER_VarThreshold};
+        if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
+        if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
+        [~, idx] = FASTER_rejchan(EEG, args2{:});
         if ~isempty(R.FASTER_RefChan), idx = setdiff(idx, R.FASTER_RefChan); end
         Bad.Variance = idx(:)';
         used{end+1} = 'FASTER_Variance';
@@ -246,16 +266,16 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
 
     if R.FASTER_Hurst
         logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Hurst detector...');
-        args = {'elec', IdxDetect, 'measure','hurst', 'threshold', R.FASTER_HurstThreshold};
-        if ~isempty(R.FASTER_RefChan), args = [args, {'refchan', R.FASTER_RefChan}]; end
-        if ~isempty(R.FASTER_Bandpass), args = [args, {'bandpass', R.FASTER_Bandpass}]; end
-        [~, idx] = FASTER_rejchan(EEG, args{:});
+        args2 = {'elec', IdxDetect, 'measure','hurst', 'threshold', R.FASTER_HurstThreshold};
+        if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
+        if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
+        [~, idx] = FASTER_rejchan(EEG, args2{:});
         if ~isempty(R.FASTER_RefChan), idx = setdiff(idx, R.FASTER_RefChan); end
         Bad.Hurst = idx(:)';
         used{end+1} = 'FASTER_Hurst';
         logplot_badchannels(EEG, Bad.Hurst, R.LogPath, 'Hurst');
     else
-            Bad.Hurst = [];
+        Bad.Hurst = [];
     end
 
     if R.CleanRaw_Flatline
@@ -280,7 +300,6 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
 
     Bad.Known = unique(KnownBadIdx(:)','stable');
 
-    % ----------------- Combine & Summarize -----------------
     fields = {'Kurt','Spec','Prob','MeanCorr','Variance','Hurst','Flatline','CleanChan','Known'};
     allBad = [];
     summary = struct();
@@ -288,21 +307,18 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
         f = fields{k};
         if ~isfield(Bad,f) || isempty(Bad.(f)), Bad.(f) = []; end
         summary.(f) = numel(Bad.(f));
-        allBad = [allBad, Bad.(f)]; %#ok<AGROW>
+        allBad = [allBad, Bad.(f)];
     end
     Bad.all = unique(allBad, 'stable');
     summary.Total = numel(Bad.all);
 
     logPrint(R.LogFile, sprintf('[remove_bad_channels] Total bad channels identified: %d', summary.Total));
-
-    % ----------------- Log Report -----------------
     logreport_badchannels(Bad, R.LogFile);
 
-    % ----------------- Action: Remove or Flag -----------------
     switch lower(R.Action)
         case 'remove'
             if ~isempty(Bad.all)
-                logPrint(R.LogFile,sprintf( '[remove_bad_channels] Removing %d bad channels...', summary.Total));
+                logPrint(R.LogFile, sprintf('[remove_bad_channels] Removing %d bad channels...', summary.Total));
                 EEG = pop_select(EEG, 'rmchannel', Bad.all);
                 EEG = eeg_checkset(EEG);
                 logPrint(R.LogFile, '[remove_bad_channels] Bad channels removed successfully.');
@@ -317,7 +333,6 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
             logPrint(R.LogFile, '[remove_bad_channels] Bad channels flagged successfully.');
     end
 
-    % ----------------- Bookkeeping in EEG.etc -----------------
     out.Bad = Bad;
     out.summary = summary;
     out.detectors_used = used;
@@ -328,4 +343,7 @@ function [EEG, out] = remove_bad_channels(EEG, varargin)
     EEG.etc.EEGdojo.BadChanLabel = idx2chans(EEG, Bad.all);
     EEG.etc.EEGdojo.BadChanSummary = summary;
     EEG.etc.EEGdojo.BadDetectorsUsed = used;
+
+    state.EEG = EEG;
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

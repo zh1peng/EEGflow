@@ -1,74 +1,86 @@
-function [EEG, out] = correct_baseline(EEG, varargin)
-% CORRECT_BASELINE Performs baseline correction on EEG data.
-%   This function applies baseline correction to EEG data, either epoched
-%   or continuous, by subtracting the mean of a specified baseline window.
-%   It uses the EEGLAB function `pop_rmbase`.
+﻿function state = correct_baseline(state, args, meta)
+%CORRECT_BASELINE Apply baseline correction to state.EEG.
 %
-% Syntax:
-%   [EEG, out] = prep.correct_baseline(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Uses EEGLAB pop_rmbase to subtract the mean of a specified baseline
+%   window (ms) from each epoch (or continuous data). If BaselineWindow is
+%   empty, the step is skipped.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (baseline-corrected)
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'BaselineWindow' - (numeric array, default: [])
-%                      A two-element array [start_ms, end_ms] specifying the
-%                      baseline window in milliseconds. For example, [-200 0]
-%                      for 200ms before stimulus onset. If empty, baseline
-%                      correction is skipped.
-%   'LogFile'        - (char | string, default: '')
-%                      Path to a log file for verbose output. If empty, output
-%                      is directed to the command window.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.correct_baseline if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with baseline corrected data.
-%   out         - Structure containing output information:
-%                 out.baseline_window_ms - (numeric array) The baseline window
-%                                          used for correction.
+% Parameters
+%   - BaselineWindow
+%       Type: numeric; Shape: length 2; Default: []
+%       Baseline window in milliseconds relative to epoch time 0.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Optional log file path.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-% Examples:
-%   % Example 1: Apply baseline correction from -200ms to 0ms (without pipeline)
-%   % Load an EEG dataset first, e.g., EEG = pop_loadset('eeg_data.set');
-%   EEG_corrected = prep.correct_baseline(EEG, 'BaselineWindow', [-200 0]);
-%   disp('Baseline correction applied from -200ms to 0ms.');
+% Side effects
+%   state.EEG updated in-place; history includes the applied window.
 %
-%   % Example 2: Usage within a pipeline
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.correct_baseline, ...
-%       'BaselineWindow', [-500 0], ...
-%       'LogFile', p.LogFile); %% p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('Baseline correction applied via pipeline.');
+% Usage
+%   state = prep.correct_baseline(state, struct('BaselineWindow', [-200 0]));
 %
-% See also: pop_rmbase
+% See also: pop_rmbase, eeg_checkset, prep.segment_task
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'correct_baseline';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('BaselineWindow', [], @(x) isnumeric(x) && numel(x) == 2);
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct();
-    out.baseline_window_ms = R.BaselineWindow;
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     if isempty(R.BaselineWindow)
         logPrint(R.LogFile, '[correct_baseline] BaselineWindow is empty, skipping baseline correction.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
     logPrint(R.LogFile, '[correct_baseline] Starting baseline correction.');
     logPrint(R.LogFile, sprintf('[correct_baseline] Baseline window: [%d %d] ms', R.BaselineWindow(1), R.BaselineWindow(2)));
 
-    if EEG.trials > 1
+    if state.EEG.trials > 1
         logPrint(R.LogFile, '[correct_baseline] Applying baseline correction to epoched data.');
     else
         logPrint(R.LogFile, '[correct_baseline] Applying baseline correction to continuous data.');
     end
-    % Perform baseline correction
-    EEG = pop_rmbase(EEG, R.BaselineWindow);
-    EEG = eeg_checkset(EEG); % Always checkset after modifying EEG
+    state.EEG = pop_rmbase(state.EEG, R.BaselineWindow);
+    state.EEG = eeg_checkset(state.EEG);
     logPrint(R.LogFile, '[correct_baseline] Baseline correction complete.');
+
+    out = struct('baseline_window_ms', R.BaselineWindow);
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

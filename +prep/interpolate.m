@@ -1,76 +1,85 @@
-function [EEG, out] = interpolate(EEG, varargin)
-% INTERPOLATE Interpolates missing channels in EEG data.
-%   This function identifies channels present in the original channel locations
-%   (`EEG.urchanlocs`) but missing from the current EEG dataset (`EEG.chanlocs`),
-%   and then interpolates their data using spherical interpolation. This is
-%   typically used to restore data for channels that were removed (e.g., bad channels).
+﻿function state = interpolate(state, args, meta)
+%INTERPOLATE Interpolate missing channels using original channel locations.
 %
-% Syntax:
-%   [EEG, out] = prep.interpolate(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Restores channels that were removed by interpolating from EEG.urchanlocs
+%   using spherical interpolation (pop_interp). Requires EEG.urchanlocs.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure. Must contain `EEG.urchanlocs` with
-%                 original channel locations.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%     - state.EEG.urchanlocs (original channel locations)
+%   Updated/created state fields:
+%     - state.EEG (interpolated)
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'LogFile'   - (char | string, default: '')
-%                 Path to a log file for verbose output. If empty, output
-%                 is directed to the command window.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.interpolate if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with interpolated channels.
-%   out         - Structure containing output information:
-%                 out.interpolated_channels - (cell array of strings) Labels
-%                                             of channels that were interpolated.
+% Parameters
+%   - LogFile
+%       Type: char; Default: ''
+%       Optional log file path.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-% Examples:
-%   % Example 1: Interpolate missing channels (without pipeline)
-%   % Assume EEG has some channels removed and EEG.urchanlocs is set.
-%   % e.g., EEG = pop_select(EEG, 'nochannel', [1 5]);
-%   % EEG.urchanlocs = original_EEG.chanlocs;
-%   EEG_interpolated = prep.interpolate(EEG);
-%   disp('Missing channels interpolated.');
+% Side effects
+%   state.EEG updated in-place; history includes interpolated channel labels.
 %
-%   % Example 2: Usage within a pipeline
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.interpolate, ...
-%       'LogFile', p.LogFile); %% p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('Missing channels interpolated via pipeline.');
+% Usage
+%   state = prep.interpolate(state);
 %
-% See also: pop_interp, eeg_checkset
+% See also: pop_interp, eeg_checkset, prep.remove_bad_channels
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'interpolate';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('LogFile', '', @ischar);
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize output structure
-    out.interpolated_channels = {};
-
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     logPrint(R.LogFile, '[interpolate] Starting channel interpolation.');
 
-    if ~isfield(EEG, 'urchanlocs') || isempty(EEG.urchanlocs)
-        error('[interpolate] Skipping interpolation: No original channel locations (EEG.urchanlocs) found. Ensure EEG.urchanlocs is set before calling this function.');
+    if ~isfield(state.EEG, 'urchanlocs') || isempty(state.EEG.urchanlocs)
+        error('[interpolate] No original channel locations (EEG.urchanlocs) found.');
     end
 
-    original_chans = {EEG.urchanlocs.labels};
-    current_chans = {EEG.chanlocs.labels};
+    original_chans = {state.EEG.urchanlocs.labels};
+    current_chans = {state.EEG.chanlocs.labels};
     chans_to_interp = setdiff(original_chans, current_chans);
 
     if isempty(chans_to_interp)
         logPrint(R.LogFile, '[interpolate] Skipping interpolation: No channels to interpolate found.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
     logPrint(R.LogFile, sprintf('[interpolate] Interpolating %d channels: %s', numel(chans_to_interp), strjoin(chans_to_interp, ', ')));
-    EEG = pop_interp(EEG, EEG.urchanlocs, 'spherical');
-    EEG = eeg_checkset(EEG); % Update EEG structure after changes
+    state.EEG = pop_interp(state.EEG, state.EEG.urchanlocs, 'spherical');
+    state.EEG = eeg_checkset(state.EEG);
     logPrint(R.LogFile, '[interpolate] Interpolation complete.');
-    out.interpolated_channels = chans_to_interp;
 
+    out = struct('interpolated_channels', chans_to_interp);
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

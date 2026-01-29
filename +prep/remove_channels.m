@@ -1,76 +1,91 @@
-function EEG = remove_channels(EEG, varargin)
-% REMOVE_CHANNELS  Removes specified channels from an EEGLAB dataset.
-%   This function provides a flexible way to remove channels from an EEG
-%   dataset, either by their numerical indices or by their labels. It's
-%   useful for excluding channels that are known to be problematic or
-%   irrelevant for a specific analysis.
+﻿function state = remove_channels(state, args, meta)
+%REMOVE_CHANNELS Remove specified channels from state.EEG.
 %
-% Syntax:
-%   EEG = prep.remove_channels(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Removes channels by index and/or label using pop_select('nochannel', ...).
+%   If both index and labels are provided, their union is removed.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (channels removed)
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'ChanIdx'       - (numeric array, default: [])
-%                     Numerical indices of channels to remove.
-%   'Chan2remove'    - (cell array of strings, default: {})
-%                     Labels of channels to remove (e.g., {'Cz', 'Fz'}).
-%                     If both 'ChanIdx' and 'Chan2remove' are provided,
-%                     channels specified by both will be removed.
-%   'LogFile'       - (char | string, default: '')
-%                     Path to a log file for verbose output. If empty, output
-%                     is directed to the command window.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.remove_channels if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with specified channels removed.
+% Parameters
+%   - ChanIdx
+%       Type: numeric; Shape: vector; Default: []
+%       Channel indices to remove.
+%   - Chan2remove
+%       Type: cellstr|char|string; Default: {}
+%       Channel labels to remove; resolved via chans2idx.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Optional log file path.
+% Example args
+%   args = struct('Chan2remove', {'ECG'});
 %
-% Examples:
-%   % Example 1: Remove channels by index (without pipeline)
-%   % Load an EEG dataset first, e.g., EEG = pop_loadset('eeg_data.set');
-%   EEG_cleaned = prep.remove_channels(EEG, ...
-%       'ChanIdx', [1 5 10], ...
-%       'LogFile', 'channel_removal_log.txt');
-%   disp('Channels 1, 5, and 10 removed.');
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-%   % Example 2: Remove channels by label (with pipeline)
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.remove_channels, ...
-%       'Chan2remove', {'EOG1', 'EOG2', 'ECG'}, ...
-%       'LogFile', p.LogFile); % p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('EOG and ECG channels removed via pipeline.');
+% Side effects
+%   state.EEG updated in-place; history includes removed indices.
 %
-% See also: pop_select, chans2idx
+% Usage
+%   state = prep.remove_channels(state, struct('ChanIdx',[1 5 10]));
+%   state = prep.remove_channels(state, struct('Chan2remove',{'EOG1','EOG2'}));
+%
+% See also: pop_select, chans2idx, prep.select_channels
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'remove_channels';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('ChanIdx', [], @(x) isnumeric(x) && isvector(x));
-    p.addParameter('Chan2remove', {}, @(x) iscellstr(x) || ischar(x));
+    p.addParameter('Chan2remove', {}, @(x) iscellstr(x) || ischar(x) || isstring(x));
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
+
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     if isempty(R.ChanIdx) && isempty(R.Chan2remove)
         logPrint(R.LogFile, '[remove_channels] No channels specified for removal. Skipping.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
     channels_to_remove_idx = [];
-
     if ~isempty(R.ChanIdx)
         channels_to_remove_idx = [channels_to_remove_idx, R.ChanIdx];
         logPrint(R.LogFile, sprintf('[remove_channels] Channels to remove by index: %s', num2str(R.ChanIdx)));
     end
-
     if ~isempty(R.Chan2remove)
-        if ischar(R.Chan2remove)
-            R.Chan2remove = {R.Chan2remove};
+        if ischar(R.Chan2remove) || isstring(R.Chan2remove)
+            R.Chan2remove = cellstr(R.Chan2remove);
         end
-        % Changed call to chans2idx to use explicit name-value pair
-        idx_from_labels = chans2idx(EEG, R.Chan2remove, 'MustExist', false); 
+        idx_from_labels = chans2idx(state.EEG, R.Chan2remove, 'MustExist', false);
         if ~isempty(idx_from_labels)
             channels_to_remove_idx = [channels_to_remove_idx, idx_from_labels];
             logPrint(R.LogFile, sprintf('[remove_channels] Channels to remove by label: %s (indices: %s)', strjoin(R.Chan2remove, ', '), num2str(idx_from_labels)));
@@ -79,21 +94,20 @@ function EEG = remove_channels(EEG, varargin)
         end
     end
 
-    channels_to_remove_idx = unique(channels_to_remove_idx); % Ensure unique indices
-    channels_to_remove_idx(channels_to_remove_idx > EEG.nbchan | channels_to_remove_idx < 1) = []; % Remove out-of-bounds indices
+    channels_to_remove_idx = unique(channels_to_remove_idx);
+    channels_to_remove_idx(channels_to_remove_idx > state.EEG.nbchan | channels_to_remove_idx < 1) = [];
 
     if isempty(channels_to_remove_idx)
         logPrint(R.LogFile, '[remove_channels] No valid channels to remove after processing inputs. Skipping.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
-    % Debugging: Inspect arguments before pop_select
-    param_name = 'nochannel';
-    param_value = channels_to_remove_idx;
     logPrint(R.LogFile, sprintf('[remove_channels] Removing %d channels: %s', length(channels_to_remove_idx), num2str(channels_to_remove_idx)));
-    EEG = pop_select(EEG, param_name, param_value); % This is the line in question
-    EEG = eeg_checkset(EEG);
+    state.EEG = pop_select(state.EEG, 'nochannel', channels_to_remove_idx);
+    state.EEG = eeg_checkset(state.EEG);
     logPrint(R.LogFile, '[remove_channels] Channel removal complete.');
 
-
+    out = struct('removed_idx', channels_to_remove_idx);
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

@@ -1,50 +1,75 @@
-function [EEG, out] = downsample(EEG, varargin)
-% DOWNSAMPLE Downsamples EEG data to a specified frequency.
+﻿function state = downsample(state, args, meta)
+%DOWNSAMPLE Downsample state.EEG to a target sampling rate.
 %
-% This function reduces the sampling rate of the EEG data using EEGLAB's
-% `pop_resample` function. This can be useful for reducing file size and
-% processing time, especially for data acquired at very high sampling rates.
+% Purpose & behavior
+%   Uses EEGLAB pop_resample to change the sampling rate. The actual
+%   resulting rate is taken from EEG.srate after resampling.
 %
-% Inputs:
-%   EEG         - EEGLAB EEG structure.
-%   varargin    - Optional parameters:
-%     'freq'    - (numeric) The target sampling frequency in Hz. Default is 250.
-%     'LogFile' - (char) Path to the log file for recording processing
-%                 information. Default is ''.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (resampled)
+%     - state.history
 %
-% Outputs:
-%   EEG         - Modified EEGLAB EEG structure with downsampled data.
-%   out         - Structure containing output information:
-%     .new_sampling_rate - (numeric) The actual new sampling rate of the EEG data.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.downsample if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Examples:
-%   % 1. Downsample EEG data to 128 Hz:
-%   EEG = downsample(EEG, 'freq', 128);
+% Parameters
+%   - Rate
+%       Type: numeric; Default: 250
+%       Target sampling rate in Hz.
+%   - LogFile
+%       Type: char; Default: ''
+%       Optional log file path.
+% Example args
+%   args = struct('Rate', 250);
 %
-%   % 2. Usage within a pipeline:
-%   %    (Assuming 'p' is a parameter structure containing 'p.LogFile')
-%   pipe = pipe.addStep(@prep.downsample, ...
-%       'freq', 250, ...
-%       'LogFile', p.LogFile);
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-% See also: pop_resample
+% Side effects
+%   state.EEG updated in-place; history includes new_sampling_rate.
+%
+% Usage
+%   state = prep.downsample(state, struct('Rate', 128));
+%
+% See also: pop_resample, eeg_checkset
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'downsample';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('Rate', 250, @isnumeric);
     p.addParameter('LogFile', '', @ischar);
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize output structure
-    out.new_sampling_rate = R.Rate;
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     logPrint(R.LogFile, sprintf('[downsample] Downsampling data to %d Hz.', R.Rate));
-    EEG = pop_resample(EEG, R.Rate);
-    EEG = eeg_checkset(EEG); % Update EEG structure after changes
-    logPrint(R.LogFile, sprintf('[downsample] Downsampling complete. New sampling rate: %d Hz.', EEG.srate));
-    out.new_sampling_rate = EEG.srate; % Ensure output reflects actual srate
+    state.EEG = pop_resample(state.EEG, R.Rate);
+    state.EEG = eeg_checkset(state.EEG);
+    logPrint(R.LogFile, sprintf('[downsample] Downsampling complete. New sampling rate: %d Hz.', state.EEG.srate));
 
+    out = struct('new_sampling_rate', state.EEG.srate);
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

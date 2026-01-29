@@ -1,94 +1,98 @@
-function [EEG, out] = filter(EEG, varargin)
-% FILTER Applies high-pass and low-pass filters to EEG data.
+﻿function state = filter(state, args, meta)
+%FILTER Apply high-pass and/or low-pass FIR filters to state.EEG.
 %
-% This function applies FIR (Finite Impulse Response) filters to the EEG data
-% using EEGLAB's `pop_eegfiltnew` function. It supports both high-pass and
-% low-pass filtering.
+% Purpose & behavior
+%   Uses EEGLAB pop_eegfiltnew to apply a high-pass (LowCutoff) and/or
+%   low-pass (HighCutoff) FIR filter. If both cutoffs are negative, the
+%   step is skipped. If both are positive, LowCutoff must be < HighCutoff.
 %
-% Syntax:
-%   [EEG, out] = prep.filter(EEG, 'param', value, ...)
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG
+%   Updated/created state fields:
+%     - state.EEG (filtered)
+%     - state.history
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.filter if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Optional Parameters (Name-Value Pairs):
-%   'LowCutoff' - (numeric, default: -1)
-%                 High-pass cutoff frequency in Hz. If -1 or 0, no high-pass
-%                 filter is applied.
-%   'HighCutoff'- (numeric, default: -1)
-%                 Low-pass cutoff frequency in Hz. If -1 or 0, no low-pass
-%                 filter is applied.
-%   'LogFile'   - (char | string, default: '')
-%                 Path to a log file for verbose output. If empty, output
-%                 is directed to the command window.
+% Parameters
+%   - LowCutoff
+%       Type: numeric; Default: -1
+%       High-pass cutoff in Hz. <=0 disables high-pass.
+%   - HighCutoff
+%       Type: numeric; Default: -1
+%       Low-pass cutoff in Hz. <=0 disables low-pass.
+%   - LogFile
+%       Type: char; Default: ''
+%       Optional log file path.
+% Example args
+%   args = struct('LowCutoff', 0.5, 'HighCutoff', 30);
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with filtered data.
-%   out         - Structure containing output information:
-%                 out.LowCutoff   - (numeric) The high-pass frequency used.
-%                 out.HighCutoff  - (numeric) The low-pass frequency used.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-% Examples:
-%   % Example 1: Apply a band-pass filter from 0.5 Hz to 30 Hz (without pipeline)
-%   % Load an EEG dataset first, e.g., EEG = pop_loadset('eeg_data.set');
-%   EEG_filtered = prep.filter(EEG, 'LowCutoff', 0.5, 'HighCutoff', 30);
-%   disp('EEG data band-pass filtered from 0.5 to 30 Hz.');
+% Side effects
+%   state.EEG updated in-place.
 %
-%   % Example 2: Apply only a high-pass filter at 1 Hz (with pipeline)
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.filter, ...
-%       'LowCutoff', 1, ...
-%       'LogFile', p.LogFile); %% p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('EEG data high-pass filtered via pipeline.');
+% Usage
+%   state = prep.filter(state, struct('LowCutoff',0.5,'HighCutoff',30));
+%   state = prep.filter(state, struct('LowCutoff',1)); % high-pass only
 %
-% See also: pop_eegfiltnew
+% See also: pop_eegfiltnew, eeg_checkset, prep.remove_powerline
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'filter';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
-    p.addParameter('LowCutoff', -1, @isnumeric); % Changed from HPfreq
-    p.addParameter('HighCutoff', -1, @isnumeric); % Changed from LPfreq
+    p.addParameter('LowCutoff', -1, @isnumeric);
+    p.addParameter('HighCutoff', -1, @isnumeric);
     p.addParameter('LogFile', '', @ischar);
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize output structure
-    out.LowCutoff = R.LowCutoff; % Changed from HPfreq
-    out.HighCutoff = R.HighCutoff; % Changed from LPfreq
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     logPrint(R.LogFile, '[filter] Starting filtering process.');
-    
-    % Construct log message for filter parameters
-    filter_msg = '';
-    if R.LowCutoff > 0, filter_msg = [filter_msg, sprintf('High-pass: %.2f Hz. ', R.LowCutoff)]; end % Changed from HPfreq
-    if R.HighCutoff > 0, filter_msg = [filter_msg, sprintf('Low-pass: %.2f Hz.', R.HighCutoff)]; end % Changed from LPfreq
-    if isempty(filter_msg), filter_msg = 'No filter applied (LowCutoff and HighCutoff are <= 0).'; end % Changed parameter names
-    logPrint(R.LogFile, sprintf('[filter] %s', filter_msg));
 
-    % Input validation for frequencies
     if R.LowCutoff > 0 && R.HighCutoff > 0 && R.LowCutoff >= R.HighCutoff
-        error('[filter] High-pass frequency (%.2f Hz) must be lower than low-pass frequency (%.2f Hz).', R.LowCutoff, R.HighCutoff); % Changed parameter names
+        error('[filter] High-pass frequency (%.2f Hz) must be lower than low-pass frequency (%.2f Hz).', ...
+            R.LowCutoff, R.HighCutoff);
     end
     if R.LowCutoff < 0 && R.HighCutoff < 0
         logPrint(R.LogFile, '[filter] No valid filter frequencies provided. Skipping filtering.');
-        return; % Skip filtering if no valid frequencies
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        return;
     end
 
+    if R.LowCutoff > 0
+        state.EEG = pop_eegfiltnew(state.EEG, 'locutoff', R.LowCutoff, 'plotfreqz', 0);
+        state.EEG = eeg_checkset(state.EEG);
+    end
+    if R.HighCutoff > 0
+        state.EEG = pop_eegfiltnew(state.EEG, 'hicutoff', R.HighCutoff, 'plotfreqz', 0);
+        state.EEG = eeg_checkset(state.EEG);
+    end
 
-    % Apply high-pass filter if specified
-    if R.LowCutoff > 0 % Changed from HPfreq
-        EEG = pop_eegfiltnew(EEG, 'locutoff', R.LowCutoff, 'plotfreqz', 0);
-        EEG = eeg_checkset(EEG);
-    end
-    
-    % Apply low-pass filter if specified
-    if R.HighCutoff > 0 % Changed from LPfreq
-        EEG = pop_eegfiltnew(EEG, 'hicutoff', R.HighCutoff,  'plotfreqz', 0);
-        EEG = eeg_checkset(EEG);
-    end
-    
     logPrint(R.LogFile, '[filter] Filtering complete.');
-
+    out = struct('LowCutoff', R.LowCutoff, 'HighCutoff', R.HighCutoff);
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

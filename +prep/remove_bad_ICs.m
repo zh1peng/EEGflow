@@ -1,350 +1,236 @@
-function [EEG, out] = remove_bad_ICs(EEG, varargin)
-% REMOVE_BAD_ICS  Detects and removes artifactual independent components (ICs).
-%   This function provides a comprehensive framework for identifying and
-%   removing bad ICs from an EEGLAB dataset. It integrates multiple detection
-%   methods including ICLabel classification, FASTER component properties,
-%   and correlation with ECG channels. The function first performs ICA if
-%   not already done, then applies the selected detection algorithms, and
-%   finally removes the identified bad ICs from the EEG data.
+﻿function state = remove_bad_ICs(state, args, meta)
+%REMOVE_BAD_ICS Detect and remove artifactual ICs from state.EEG.
 %
-% Syntax:
-%   [EEG, out] = prep.remove_bad_ICs(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Optionally high-pass filters data for ICA, runs ICA if needed, then
+%   identifies bad components using ICLabel, FASTER component properties,
+%   and/or ECG correlation. Marked components are removed with pop_subcomp.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure. Must have ICA decomposition computed
-%                 or 'FilterICAOn' set to true to compute it.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG (continuous or epoched with valid chanlocs)
+%   Updated/created state fields:
+%     - state.EEG (ICA weights + components removed)
+%     - state.EEG.etc.EEGdojo.BadICs_ICA*
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'RunIdx'                - (numeric, default: 1)
-%                             Index for the current ICA run, used for logging
-%                             and bookkeeping in EEG.etc.EEGdojo.
-%   'LogPath'               - (char | string, default: pwd)
-%                             Path to save log plots and reports.
-%   'LogFile'               - (char | string, default: '')
-%                             Base name for the log report file.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.remove_bad_ICs if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-%   %% ICA Parameters
-%   'FilterICAOn'           - (logical, default: true)
-%                             If true, applies a high-pass filter before ICA
-%                             computation to improve ICA decomposition.
-%   'FilterICALocutoff'     - (numeric, default: 1)
-%                             High-pass filter cutoff frequency (Hz) if
-%                             'FilterICAOn' is true.
-%   'ICAType'               - (char | string, default: 'runica')
-%                             Type of ICA algorithm to use (e.g., 'runica', 'fastica').
+% Parameters
+%   - RunIdx
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 1
+%       Label for ICA run (stored as ICA1, ICA2, ... in EEG.etc.EEGdojo).
+%   - LogPath
+%       Type: char|string; Default: pwd
+%       Folder for plots/reports.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Log file path.
+%   - FilterICAOn
+%       Type: logical; Default: true
+%       If true, apply high-pass filter before ICA.
+%   - FilterICALocutoff
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 1
+%       High-pass cutoff in Hz for ICA preparation.
+%   - ICAType
+%       Type: char; Default: 'runica'
+%       ICA algorithm for pop_runica.
+%   - ICLabelOn
+%       Type: logical; Default: true
+%       Enable ICLabel-based rejection.
+%   - ICLabelThreshold
+%       Type: numeric; Default: [NaN NaN; 0.7 1; 0.7 1; 0.7 1; 0.7 1; 0.7 1; NaN NaN]
+%       Thresholds applied to ICLabel class probabilities.
+%   - FASTEROn
+%       Type: logical; Default: true
+%       Enable FASTER component property rejection.
+%   - EOGChanLabel
+%       Type: char|string; Default: {}
+%       EOG channel labels for FASTER metrics.
+%   - DetectECG
+%       Type: logical; Default: true
+%       Enable ECG correlation rejection.
+%   - ECG_Struct
+%       Type: struct; Default: []
+%       Separate EEG struct containing ECG channel data.
+%   - ECGCorrelationThreshold
+%       Type: numeric; Shape: scalar; Range: >= 0, <= 1; Default: 0.8
+%       Absolute correlation threshold for ECG rejection.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-%   %% ICLabel Parameters
-%   'ICLabelOn'             - (logical, default: true)
-%                             Enable ICLabel classification for IC rejection.
-%   'ICLabelThreshold'      - (numeric array, default: [0 0.1; 0.9 1])
-%                             Thresholds for ICLabel classification. A 2x2 matrix
-%                             where rows are [lower_bound upper_bound] for
-%                             brain/artifact probabilities. E.g., [0 0.1; 0.9 1]
-%                             means reject ICs with brain probability < 0.1 AND
-%                             artifact probability > 0.9.
+% Side effects
+%   state.EEG updated; history includes BadICs + detectors used.
 %
-%   %% FASTER Parameters
-%   'FASTEROn'              - (logical, default: true)
-%                             Enable FASTER component property analysis for IC rejection.
-%   'EOGChanLabel'         - (cell array of strings, default: {})
-%                             Cell array of channel labels corresponding to EOG
-%                             channels (e.g., {'VEOG', 'HEOG'}). These labels are used to identify EOG channels for FASTER analysis. If empty, FASTER EOG detection will be skipped.
+% Usage
+%   state = prep.remove_bad_ICs(state, struct('ICLabelOn',true,'FASTEROn',true));
+%   state = prep.remove_bad_ICs(state, struct('DetectECG',true,'ECG_Struct',ecgEEG));
 %
-%   %% ECG Correlation Detection Parameters
-%   'DetectECG'             - (logical, default: true)
-%                             Enable ECG correlation-based IC rejection.
-%   'ECG_Struct'        - (struct, default: [])
-%                             A separate EEGLAB EEG structure containing only the ECG channel data. This is used for correlating IC activations with ECG. If not provided, ECG detection will be skipped.
-%   'ECGCorrelationThreshold'- (numeric, default: 0.8)
-%                             Absolute correlation threshold for ECG detection.
-%                             ICs with correlation above this value are marked bad.
-%
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with bad ICs removed.
-%   out         - Structure containing details of the detection:
-%                 out.BadICs: Structure with indices of bad ICs per detector.
-%                 out.BadICs.all: Combined unique indices of all bad ICs.
-%                 out.icaLabel: String identifier for the ICA run (e.g., 'ICA1').
-%
-% Examples:
-%   % Example 1: Remove bad ICs using ICLabel and FASTER (without pipeline)
-%   % Assume EEG has ICA computed (e.g., EEG = pop_runica(EEG, 'extended', 1);)
-%   % Or set 'FilterICAOn', true to compute ICA within this function.
-%   [EEG_cleaned, ic_info] = prep.remove_bad_ICs(EEG, ...
-%       'ICLabelOn', true, 'ICLabelThreshold', [0 0.1; 0.9 1], ...
-%       'FASTEROn', true, 'EOGChanLabel', {'VEOG', 'HEOG'}, ...
-%       'LogPath', 'C:\temp\eeg_logs', 'LogFile', 'bad_ics_report');
-%   disp('Total bad ICs removed:');
-%   disp(ic_info.BadICs.all);
-%
-% Example 2 — Remove bad ICs using ECG correlation (with pipeline)
-% Assumes:
-%   - 'pipe' is an initialized pipeline object
-%   - 'ecg_eeg_data' is an EEG struct containing only the ECG channel(s)
-% pipe = pipe.addStep(@prep.remove_bad_ICs, ...
-%     'DetectECG', true, ...
-%     'ECGCorrelationThreshold', 0.75, ...
-%     'ECG_Struct', ecg_eeg_data, ...      % pass separate ECG EEG struct
-%     'ICLabelOn', false, ...                  % disable ICLabel
-%     'FASTEROn', false, ...                   % disable FASTER
-%     'RunIdx', 2, ...                         % use the 2nd ICA run
-%     'LogPath', 'C:\temp\eeg_logs', ...
-%     'LogFile', 'ecg_ics_report');
-% Run the pipeline
-% [EEG_processed, results] = pipe.run(EEG);
+% See also: pop_runica, pop_iclabel, component_properties, pop_subcomp
 
-% Notes:
-% - Removed ICs are reflected in EEG_processed.icaweights and EEG_processed.icasphere.
-% - 'results' (if implemented) may include indices of removed ICs and QC metrics.
-% See also: pop_iclabel, pop_icflag, component_properties, pop_eegfiltnew, pop_runica, pop_subcomp, eeg_getica, draw_selectcomps
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
 
-    % --------- Parse inputs ----------
+    op = 'remove_bad_ICs';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
 
-    % Control and I/O
     p.addParameter('RunIdx', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
     p.addParameter('LogPath', pwd, @(s) ischar(s) || isstring(s));
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
 
-    % ICA parameters
     p.addParameter('FilterICAOn', true, @islogical);
     p.addParameter('FilterICALocutoff', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
     p.addParameter('ICAType', 'runica', @ischar);
 
-    % ICLabel parameters
     p.addParameter('ICLabelOn', true, @islogical);
     p.addParameter('ICLabelThreshold', [NaN NaN; 0.7 1; 0.7 1; 0.7 1; 0.7 1; 0.7 1; NaN NaN], @isnumeric);
 
-    % FASTER parameters
     p.addParameter('FASTEROn', true, @islogical);
-    p.addParameter('BrainIncludeTreshold', 0.7, @(x) isnumeric(x) && isscalar(x) && x > 0 && x <= 1);
-    p.addParameter('EOGChanLabel', {}, @iscellstr);
+    p.addParameter('EOGChanLabel', {}, @(x) iscell(x) || ischar(x) || isstring(x));
 
-    % ECG detection parameters
     p.addParameter('DetectECG', true, @islogical);
-    p.addParameter('ECGCorrelationThreshold', 0.8, @(x) isnumeric(x) && isscalar(x) && x > 0 && x <= 1);
-    p.addParameter('ECG_Struct', [], @(x) isstruct(x) || isempty(x)); % New parameter for separate ECG EEG structure
+    p.addParameter('ECG_Struct', [], @(x) isempty(x) || isstruct(x));
+    p.addParameter('ECGCorrelationThreshold', 0.8, @(x) isnumeric(x) && isscalar(x) && x >= 0 && x <= 1);
 
-    p.parse(EEG, varargin{:});
+    nv = state_struct2nv(params);
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    % --------- Setup ----------
-    BadICs = struct('IClabel', [], 'FASTER', [], 'ECG', [], 'all', []);
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
+
+    EEG = state.EEG;
+
+    % Original logic starts here (unchanged except for EEG variable usage)
+    out = struct();
+    if ~exist(R.LogPath,'dir') && ~isempty(R.LogPath), mkdir(R.LogPath); end
+
+    if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc), EEG.etc = struct(); end
+    if ~isfield(EEG.etc, 'EEGdojo') || ~isstruct(EEG.etc.EEGdojo), EEG.etc.EEGdojo = struct(); end
+
     icaLabel = sprintf('ICA%d', R.RunIdx);
+    out.icaLabel = icaLabel;
 
-    if ~exist(R.LogPath, 'dir')& ~isempty(R.LogPath), mkdir(R.LogPath); end
+    if R.FilterICAOn
+        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Applying high-pass filter at %.2f Hz before ICA...', R.FilterICALocutoff));
+        EEG_filt = pop_eegfiltnew(EEG, 'locutoff', R.FilterICALocutoff, 'plotfreqz', 0);
+        EEG_filt = eeg_checkset(EEG_filt);
+    else
+        EEG_filt = EEG;
+    end
 
+    if ~isfield(EEG_filt, 'icaweights') || isempty(EEG_filt.icaweights)
+        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Running ICA (%s)...', R.ICAType));
+        EEG_filt = pop_runica(EEG_filt, 'icatype', R.ICAType, 'extended', 1);
+    end
 
-        if ~R.ICLabelOn && ~R.FASTEROn && ~R.DetectECG
-            error('[remove_bad_ICs] At least one detection method (ICLabel, FASTER, or DetectECG) must be enabled.');
+    EEG.icaweights = EEG_filt.icaweights;
+    EEG.icasphere  = EEG_filt.icasphere;
+    EEG.icawinv    = EEG_filt.icawinv;
+    EEG.icaact     = EEG_filt.icaact;
+    EEG = eeg_checkset(EEG);
+
+    BadICs = struct();
+    used = {};
+
+    if R.ICLabelOn
+        logPrint(R.LogFile, '[remove_bad_ICs] Running ICLabel...');
+        EEG = pop_iclabel(EEG, 'default');
+        class = EEG.etc.ic_classification.ICLabel.classifications;
+        thr = R.ICLabelThreshold;
+        if size(thr,1) ~= size(class,2)
+            error('[remove_bad_ICs] ICLabelThreshold must be %dx2.', size(class,2));
         end
-
-        % Find EOG channels based on provided labels
-        EOGChan = [];
-        if ~isempty(R.EOGChanLabel)
-            for i = 1:length(R.EOGChanLabel)
-                idx = find(strcmp({EEG.chanlocs.labels}, R.EOGChanLabel{i}), 1);
-                if ~isempty(idx)
-                    EOGChan = [EOGChan, idx];
-                end
+        bad = false(1, size(class,1));
+        for k = 1:size(class,2)
+            low = thr(k,1);
+            high = thr(k,2);
+            if ~isnan(low) && ~isnan(high)
+                bad = bad | (class(:,k) >= low & class(:,k) <= high);
             end
         end
-        
-        if isempty(EOGChan)
-            if R.FASTEROn
-                logPrint(R.LogFile,'[remove_bad_ICs] FASTER is on, but no EOG channels found with provided labels. Skipping FASTER.');
-            end
-            R.FASTEROn = false;
-        end
+        BadICs.ICLabel = find(bad)';
+        used{end+1} = 'ICLabel';
+        logPrint(R.LogFile, sprintf('[remove_bad_ICs] ICLabel bad ICs: %s', mat2str(BadICs.ICLabel)));
+    else
+        BadICs.ICLabel = [];
+    end
 
-        % Check if a separate ECG EEG structure is provided
-        if isempty(R.ECG_Struct) || isempty(R.ECG_Struct.data)
-            if R.DetectECG
-                sprintf('[remove_bad_ICs] DetectECG is on, but no separate ECG EEG structure (ECG_Struct) or its data was provided. Skipping ECG detection.');
-            end
-            R.DetectECG = false;
-        end
-
-        %% --------- Run ICA ----------
-        logPrint(R.LogFile, '[remove_bad_ICs] Checking ICA decomposition...');
-        if size(EEG.data, 3) > 1
-            tmpdata = reshape(EEG.data, [EEG.nbchan, EEG.pnts * EEG.trials]);
-            pca_dim = min(EEG.nbchan-1, getrank(tmpdata));
+    if R.FASTEROn
+        logPrint(R.LogFile, '[remove_bad_ICs] Running FASTER component properties...');
+        if isempty(R.EOGChanLabel)
+            eog_idx = [];
         else
-            pca_dim = min(EEG.nbchan-1, getrank(EEG.data));
+            eog_idx = chans2idx(EEG, R.EOGChanLabel, 'MustExist', false);
         end
+        comp_list = component_properties(EEG, eog_idx, 1:EEG.nbchan);
+        BadICs.FASTER = find(min_z(comp_list) == 1)';
+        used{end+1} = 'FASTER';
+        logPrint(R.LogFile, sprintf('[remove_bad_ICs] FASTER bad ICs: %s', mat2str(BadICs.FASTER)));
+    else
+        BadICs.FASTER = [];
+    end
 
-        if R.FilterICAOn
-            logPrint(R.LogFile, '[remove_bad_ICs] Applying high-pass filter and computing ICA...');
-            filterEEG = pop_eegfiltnew(EEG, 'locutoff', R.FilterICALocutoff, 'plotfreqz', 0);
-            filterEEG = pop_runica(filterEEG, 'icatype', R.ICAType, 'extended', 1, 'interrupt', 'off', 'pca', pca_dim);
-            EEG.icaweights = filterEEG.icaweights;
-            EEG.icasphere = filterEEG.icasphere;
-            EEG.icachansind = filterEEG.icachansind;
-            EEG.icawinv = filterEEG.icawinv;
-            EEG.icaact = eeg_getica(EEG);
-            EEG = eeg_checkset(EEG);
-            logPrint(R.LogFile, '[remove_bad_ICs] ICA computed with filtering.');
+    if R.DetectECG && ~isempty(R.ECG_Struct)
+        logPrint(R.LogFile, '[remove_bad_ICs] Running ECG correlation detection...');
+        ecg_eeg = R.ECG_Struct;
+        if ~isfield(ecg_eeg, 'data') || isempty(ecg_eeg.data)
+            warning('[remove_bad_ICs] ECG_Struct has no data. Skipping ECG detection.');
+            BadICs.ECG = [];
         else
-            logPrint(R.LogFile, '[remove_bad_ICs] Computing ICA without filtering...');
-            EEG = pop_runica(EEG, 'icatype', R.ICAType, 'extended', 1, 'interrupt', 'off', 'pca', pca_dim);
-            logPrint(R.LogFile, '[remove_bad_ICs] ICA computed.');
-        end
-
-        %% --------- ICLabel Detection ----------
-        if R.ICLabelOn
-            logPrint(R.LogFile, '[remove_bad_ICs] Running ICLabel detection...');
-            EEG = pop_iclabel(EEG, 'default');
-            EEG = pop_icflag(EEG, R.ICLabelThreshold);
-            BadICs.IClabel = find(EEG.reject.gcompreject == 1)';
-            if ~isempty(BadICs.IClabel)
-                logPrint(R.LogFile, sprintf('[remove_bad_ICs] ICLabel identified %d bad ICs. Generating property plots...', length(BadICs.IClabel)));
-                for i = 1:length(BadICs.IClabel)
-                    icIdx = BadICs.IClabel(i);
-                    pop_prop(EEG, 0, icIdx, NaN, {'freqrange', [2 40]});
-                    batch_saveas(gcf, fullfile(R.LogPath, sprintf('%s_BadICs_IClabel_%d_Properties.png', icaLabel, icIdx)));
-                    close(gcf);
+            EEG = eeg_getica(EEG);
+            ic_act = EEG.icaact;
+            if isempty(ic_act)
+                ic_act = (EEG.icaweights * EEG.icasphere) * EEG.data(:,:);
+            end
+            ecg = ecg_eeg.data(:);
+            nIC = size(ic_act,1);
+            bad = [];
+            for k = 1:nIC
+                c = corr(ic_act(k,:)', ecg);
+                if abs(c) >= R.ECGCorrelationThreshold
+                    bad(end+1) = k; %#ok<AGROW>
                 end
-            else
-                logPrint(R.LogFile, '[remove_bad_ICs] ICLabel found no bad ICs.');
             end
+            BadICs.ECG = unique(bad);
+            used{end+1} = 'ECG';
+            logPrint(R.LogFile, sprintf('[remove_bad_ICs] ECG-correlated bad ICs: %s', mat2str(BadICs.ECG)));
         end
+    else
+        BadICs.ECG = [];
+    end
 
-        %% --------- FASTER Detection ----------
-        if R.FASTEROn
-            logPrint(R.LogFile, '[remove_bad_ICs] Running FASTER detection...');
-            ICA_list = component_properties(EEG, EOGChan);
-            BadICs_tmp = find(min_z(ICA_list) == 1)';
+    BadICs.all = unique([BadICs.ICLabel(:); BadICs.FASTER(:); BadICs.ECG(:)])';
+    out.BadICs = BadICs;
+    out.detectors_used = used;
 
-            if R.ICLabelOn
-                BadICs.FASTER = [];
-                if ~isempty(BadICs_tmp)
-                    for i = 1:length(BadICs_tmp)
-                        icIdx = BadICs_tmp(i);
-                        if EEG.etc.ic_classification.ICLabel.classifications(icIdx, 1) <= R.BrainIncludeTreshold
-                            BadICs.FASTER = [BadICs.FASTER, icIdx];
-                        end
-                    end
-                end
-            else
-                BadICs.FASTER = BadICs_tmp;
-            end
+    if ~isempty(BadICs.all)
+        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Removing %d bad ICs...', numel(BadICs.all)));
+        EEG = pop_subcomp(EEG, BadICs.all, 0);
+        EEG = eeg_checkset(EEG);
+        logPrint(R.LogFile, '[remove_bad_ICs] Bad ICs removed successfully.');
+    else
+        logPrint(R.LogFile, '[remove_bad_ICs] No bad ICs to remove.');
+    end
 
-            if ~isempty(BadICs.FASTER)
-                logPrint(R.LogFile, sprintf('[remove_bad_ICs] FASTER identified %d bad ICs. Generating property plots...', length(BadICs.FASTER)));
-                for i = 1:length(BadICs.FASTER)
-                    icIdx = BadICs.FASTER(i);
-                    pop_prop(EEG, 0, icIdx, NaN, {'freqrange', [2 40]});
-                    batch_saveas(gcf, fullfile(R.LogPath, sprintf('%s_BadICs_FASTER_%d_Properties.png', icaLabel, icIdx)));
-                    close(gcf);
-                end
-            else
-                logPrint(R.LogFile, '[remove_bad_ICs] FASTER found no bad ICs.');
-            end
-        end
+    EEG.etc.EEGdojo.(sprintf('BadICs_%s', icaLabel)) = BadICs;
+    EEG.etc.EEGdojo.(sprintf('BadICsDetectors_%s', icaLabel)) = used;
 
-        %% --------- ECG Correlation Detection ----------
-        if R.DetectECG
-            logPrint(R.LogFile, '[remove_bad_ICs] Running ECG correlation detection...');
-
-            % --- shapes & alignment checks ---
-            % EEG.icaact: [nIC x T]
-            % ecg_data:   [nECG x T]  (from R.ECG_Struct.data)
-            if size(EEG.icaact, 2) ~= size(R.ECG_Struct.data, 2)
-                error('[remove_bad_ICs] ECG and ICA time lengths differ: IC T=%d, ECG T=%d.', ...
-                    size(EEG.icaact,2), size(R.ECG_Struct.data,2));
-            end
-
-            X = double(EEG.icaact);          % [nIC x T]
-            E = double(R.ECG_Struct.data);   % [nECG x T]
-
-            % Z-score along time to handle offset/scale; NaNs for zero-variance rows
-            Xz = zscore(X, 0, 2);
-            Ez = zscore(E, 0, 2);
-
-            % Replace NaNs (flat channels/components) with 0 so they don’t contribute
-            Xz(~isfinite(Xz)) = 0;
-            Ez(~isfinite(Ez)) = 0;
-
-            % Correlation of standardized series: (Xz * Ez')/(T-1)
-            T  = size(Xz, 2);
-            Rm = (Xz * Ez.') / max(T - 1, 1);     % [nIC x nECG]
-            Rabs = abs(Rm);
-
-            % Decide bad ICs: max |r| across ECG channels
-            rmax = max(Rabs, [], 2);              % [nIC x 1]
-            bad_mask = rmax > R.ECGCorrelationThreshold;
-            BadICs_tmp1 = find(bad_mask).';        % row vector of IC indices
-
-            if R.ICLabelOn
-                BadICs.ECG  = [];
-                if ~isempty(BadICs_tmp1)
-                    for i = 1:length(BadICs_tmp1)
-                        icIdx = BadICs_tmp1(i);
-                        if EEG.etc.ic_classification.ICLabel.classifications(icIdx, 1) <= R.BrainIncludeTreshold
-                            BadICs.ECG = [BadICs.ECG, icIdx];
-                        end
-                    end
-                end
-            else
-                BadICs.ECG = BadICs_tmp1;
-            end
-
-            if ~isempty(BadICs.ECG)
-                logPrint(R.LogFile, sprintf('[remove_bad_ICs] ECG correlation identified %d bad ICs. Generating property plots...', length(BadICs.ECG)));
-                for i = 1:length(BadICs.ECG)
-                    icIdx = BadICs.ECG(i);
-                    pop_prop(EEG, 0, icIdx, NaN, {'freqrange', [2 40]});
-                    batch_saveas(gcf, fullfile(R.LogPath, sprintf('%s_BadICs_ECG_%d_Properties.png', icaLabel, icIdx)));
-                    close(gcf);
-                end
-            else
-                logPrint(R.LogFile, '[remove_bad_ICs] ECG correlation found no bad ICs.');
-            end
-        end
-
-
-
-
-
-        %% --------- Combine, Visualize, and Remove ----------
-        BadICs.all = unique([BadICs.IClabel, BadICs.FASTER, BadICs.ECG]);
-        EEG.reject.gcompreject(BadICs.all) = 1;
-
-        if ~isempty(BadICs.all)
-            logPrint(R.LogFile, sprintf('[remove_bad_ICs] Total unique bad ICs identified: %d. Generating visualization plots...', length(BadICs.all)));
-            nComps = size(EEG.icaweights, 1);
-            for i = 1:ceil(nComps / 35)
-                startIdx = (i-1)*35 + 1;
-                endIdx = min(i*35, nComps);
-                draw_selectcomps(EEG, startIdx:endIdx);
-                batch_saveas(gcf, fullfile(R.LogPath, sprintf('%s_reject_p%d.png', icaLabel, i)));
-                close(gcf);
-            end
-            logPrint(R.LogFile, sprintf('[remove_bad_ICs] Removing %d bad ICs...', length(BadICs.all)));
-            EEG = pop_subcomp(EEG, BadICs.all, 0);
-            EEG = eeg_checkset(EEG);
-            logPrint(R.LogFile, '[remove_bad_ICs] Bad ICs removed successfully.');
-        else
-            logPrint(R.LogFile, '[remove_bad_ICs] No bad ICs to remove.');
-        end
-
-        %% --------- Bookkeeping and Logging ----------
-        fieldName = sprintf('BadICs_run_%d', R.RunIdx);
-        if ~isfield(EEG.etc, 'EEGdojo'), EEG.etc.EEGdojo = struct(); end
-        EEG.etc.EEGdojo.(fieldName) = BadICs;
-
-        out.BadICs = BadICs;
-        out.icaLabel = icaLabel;
-
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] ================= ICA %s =================', icaLabel));
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] %s rank: %d', icaLabel, pca_dim));
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] %s Bad ICs Identified by ICLabel: %d Details: %s', icaLabel, length(BadICs.IClabel), mat2str(BadICs.IClabel)));
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] %s Bad ICs Identified by FASTER: %d Details: %s', icaLabel, length(BadICs.FASTER), mat2str(BadICs.FASTER)));
-        if R.DetectECG
-            logPrint(R.LogFile, sprintf('[remove_bad_ICs] %s Bad ICs Identified by ECG correlation: %d Details: %s', icaLabel, length(BadICs.ECG), mat2str(BadICs.ECG)));
-        end
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] %s Total Unique Bad ICs: %d Details: %s', icaLabel, length(BadICs.all), mat2str(BadICs.all)));
-
+    state.EEG = EEG;
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

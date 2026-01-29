@@ -1,61 +1,89 @@
-function [EEG, out] = crop_by_markers(EEG, varargin)
-% CROP_BY_MARKERS Crops EEG data based on specified start and/or end markers.
-%   Extracts a segment between StartMarker and EndMarker with optional padding.
-%   If only StartMarker is provided, crops from (Start - PadSec) to the end.
-%   If only EndMarker is provided, crops from the beginning to (End + PadSec).
+﻿function state = crop_by_markers(state, args, meta)
+%CROP_BY_MARKERS Crop state.EEG between start/end markers with optional padding.
 %
-% Syntax:
-%   [EEG, out] = prep.crop_by_markers(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Finds event markers by type and crops the continuous data to a window
+%   defined by StartMarker/EndMarker. If only one marker is provided,
+%   cropping is from the marker (with padding) to the start/end of the file.
 %
-% Inputs:
-%   EEG             - EEGLAB EEG structure.
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG (continuous with events)
+%   Updated/created state fields:
+%     - state.EEG (cropped)
+%     - state.history
 %
-% Name-Value parameters:
-%   'StartMarker'   - (char|string, default: '') start event label.
-%   'EndMarker'     - (char|string, default: '') end event label.
-%   'PadSec'        - (numeric, default: 0) padding (s) added before start and/or after end.
-%   'LogFile'       - (char|string, default: '') path to log file ('' -> command window).
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.crop_by_markers if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Outputs:
-%   EEG             - Cropped EEGLAB EEG structure.
-%   out             - Struct with:
-%                       .mode          - 'start_end' | 'start_only' | 'end_only'
-%                       .start_sample  - used start sample (NaN if none)
-%                       .end_sample    - used end sample (NaN if none)
-%                       .pad_samples   - padding in samples (non-negative)
+% Parameters
+%   - StartMarker
+%       Type: char|string; Default: ''
+%       Event type to mark the crop start.
+%   - EndMarker
+%       Type: char|string; Default: ''
+%       Event type to mark the crop end.
+%   - PadSec
+%       Type: numeric; Default: 0
+%       Padding in seconds added before start and/or after end.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Optional log file path.
+% Example args
+%   args = struct('StartMarker','98','EndMarker','99','PadSec',0.2);
 %
-% Examples:
-%   % 1) Between two markers with 1s padding
-%   EEG = prep.crop_by_markers(EEG, 'StartMarker','start_exp', 'EndMarker','end_exp', 'PadSec',1);
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-%   % 2) Start-only (EGI style): trim everything before start (keep from start-0.5s to end)
-%   EEG = prep.crop_by_markers(EEG, 'StartMarker','segment_begin', 'PadSec',0.5);
+% Side effects
+%   state.EEG updated in-place; history includes crop window and mode.
 %
-%   % 3) End-only: keep beginning up to end+0.25s
-%   EEG = prep.crop_by_markers(EEG, 'EndMarker','segment_end', 'PadSec',0.25);
+% Usage
+%   state = prep.crop_by_markers(state, struct('StartMarker','start_exp','EndMarker','end_exp','PadSec',1));
+%   state = prep.crop_by_markers(state, struct('StartMarker','segment_begin','PadSec',0.5)); % start-only
 %
-% See also: pop_select, eeg_checkset
+% See also: pop_select, eeg_checkset, prep.insert_relative_markers
 
-    % -------- Parse inputs --------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'crop_by_markers';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('StartMarker', '', @(s) ischar(s) || isstring(s));
     p.addParameter('EndMarker',   '', @(s) ischar(s) || isstring(s));
     p.addParameter('PadSec',      0,  @isnumeric);
     p.addParameter('LogFile',     '', @(s) ischar(s) || isstring(s));
-    p.parse(EEG, varargin{:});
+    nv = state_struct2nv(params);
+
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
+
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     StartMarker = char(R.StartMarker);
     EndMarker   = char(R.EndMarker);
     PadTime     = R.PadSec;
     LogFile     = R.LogFile;
 
-    pad_samp    = max(0, round(PadTime * EEG.srate));
+    pad_samp    = max(0, round(PadTime * state.EEG.srate));
     out = struct('mode','', 'start_sample',NaN, 'end_sample',NaN, 'pad_samples',pad_samp);
 
-    % -------- Normalize event types to char --------
-    evtype = {EEG.event.type};
+    evtype = {state.EEG.event.type};
     for i = 1:numel(evtype)
         if ~(ischar(evtype{i}) || isstring(evtype{i}))
             evtype{i} = num2str(evtype{i});
@@ -63,7 +91,7 @@ function [EEG, out] = crop_by_markers(EEG, varargin)
             evtype{i} = char(evtype{i});
         end
     end
-    lat_all = [EEG.event.latency];
+    lat_all = [state.EEG.event.latency];
 
     hasStart = ~isempty(strtrim(StartMarker));
     hasEnd   = ~isempty(strtrim(EndMarker));
@@ -72,7 +100,6 @@ function [EEG, out] = crop_by_markers(EEG, varargin)
         error('[crop_by_markers] At least one of StartMarker or EndMarker must be specified.');
     end
 
-    % -------- Locate markers (first occurrence for start; last-after-start for end) --------
     if hasStart
         start_idx = find(strcmp(evtype, StartMarker), 1, 'first');
         if isempty(start_idx)
@@ -88,10 +115,9 @@ function [EEG, out] = crop_by_markers(EEG, varargin)
             if isempty(end_after)
                 error('[crop_by_markers] End marker "%s" not found after start marker "%s".', EndMarker, StartMarker);
             end
-            end_idx  = end_after(end);  % last occurrence after start
+            end_idx  = end_after(end);
             end_samp = lat_all(end_idx);
         else
-            % End-only: take the first occurrence (or choose last—first is typical)
             end_idx  = find(strcmp(evtype, EndMarker), 1, 'first');
             if isempty(end_idx)
                 error('[crop_by_markers] End marker "%s" not found in EEG events.', EndMarker);
@@ -100,43 +126,37 @@ function [EEG, out] = crop_by_markers(EEG, varargin)
         end
     end
 
-    % -------- Determine crop window --------
     if hasStart && hasEnd
         seg_start = max(1, start_samp - pad_samp);
-        seg_end   = min(EEG.pnts, end_samp + pad_samp);
+        seg_end   = min(state.EEG.pnts, end_samp + pad_samp);
         out.mode  = 'start_end';
         logPrint(LogFile, sprintf('[crop_by_markers] Cropping between "%s" and "%s" with %.2fs padding (samples: %d).', ...
             StartMarker, EndMarker, PadTime, pad_samp));
-
     elseif hasStart && ~hasEnd
-        % Start-only: trim pre-start, keep from (start - pad) to end
         seg_start = max(1, start_samp - pad_samp);
-        seg_end   = EEG.pnts;
+        seg_end   = state.EEG.pnts;
         out.mode  = 'start_only';
         logPrint(LogFile, sprintf('[crop_by_markers] Start-only crop at "%s" with %.2fs padding before start. Keeping from sample %d to end.', ...
             StartMarker, PadTime, seg_start));
-
-    else % ~hasStart && hasEnd
-        % End-only: keep from beginning to (end + pad)
+    else
         seg_start = 1;
-        seg_end   = min(EEG.pnts, end_samp + pad_samp);
+        seg_end   = min(state.EEG.pnts, end_samp + pad_samp);
         out.mode  = 'end_only';
         logPrint(LogFile, sprintf('[crop_by_markers] End-only crop at "%s" with %.2fs padding after end. Keeping from beginning to sample %d.', ...
             EndMarker, PadTime, seg_end));
     end
 
-    % Sanity check
     if ~(seg_start < seg_end)
         error('[crop_by_markers] Invalid crop window: start (%d) >= end (%d). Check markers and PadSec.', seg_start, seg_end);
     end
 
-    % -------- Apply cropping --------
-    EEG = pop_select(EEG, 'point', [seg_start, seg_end]);
-    EEG = eeg_checkset(EEG);
+    state.EEG = pop_select(state.EEG, 'point', [seg_start, seg_end]);
+    state.EEG = eeg_checkset(state.EEG);
 
-    % -------- Outputs --------
     out.start_sample = seg_start;
     out.end_sample   = seg_end;
     logPrint(LogFile, sprintf('[crop_by_markers] Cropped successfully: [%d, %d] (%.2fs).', ...
-        seg_start, seg_end, (seg_end - seg_start + 1)/EEG.srate));
+        seg_start, seg_end, (seg_end - seg_start + 1)/state.EEG.srate));
+
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

@@ -1,119 +1,113 @@
-function [EEG, out] = segment_task(EEG, varargin)
-% SEGMENT_TASK  Segments continuous EEG data into epochs around specified event markers.
-%   This function is designed for task-related EEG data where epochs are
-%   created relative to specific time-locked event markers (e.g., stimulus
-%   onset, response, trial start). It extracts segments of data within a
-%   defined time window around these markers, preparing the data for
-%   event-related potential (ERP) or other epoch-based analyses.
+﻿function state = segment_task(state, args, meta)
+%SEGMENT_TASK Segment continuous EEG into epochs around task markers.
 %
-% Syntax:
-%   [EEG, out] = prep.segment_task(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Uses pop_epoch to extract epochs around specified event types. After
+%   epoching, counts epochs per marker and stores counts in output metrics.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure (continuous data with events).
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG (continuous with events)
+%   Updated/created state fields:
+%     - state.EEG (epoched)
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'Markers'       - (cell array of strings, default: {})
-%                     A cell array of event marker strings (e.g., {'S1', 'S2', 'Response'})
-%                     around which to create epochs.
-%   'TimeWindow'    - (numeric array [start_time end_time], default: [])
-%                     A two-element numeric array specifying the time window
-%                     for epoch extraction, relative to the event marker, in milliseconds.
-%                     E.g., [-500 1500] means from 500 ms before to 1500 ms after the marker.
-%   'LogFile'       - (char | string, default: '')
-%                     Path to a log file for verbose output. If empty, output
-%                     is directed to the command window.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.segment_task if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with data segmented into epochs.
-%   out         - Structure containing details of the segmentation:
-%                 out.epochs_created: A structure where field names are marker
-%                                     types and values are the number of epochs
-%                                     created for that marker.
-%                 out.total_epochs: The total number of epochs created across
-%                                   all specified markers.
+% Parameters
+%   - Markers
+%       Type: cellstr; Default: {}
+%       Event types to epoch around.
+%   - TimeWindow
+%       Type: numeric; Shape: length 2; Default: []
+%       Epoch window in milliseconds relative to the marker.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Optional log file path.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
 %
-% Examples:
-%   % Example 1: Segment EEG around 'stim_on' and 'resp' markers (without pipeline)
-%   % Load a continuous EEG dataset with events, e.g., EEG = pop_loadset('task_eeg.set');
-%   [EEG_epoched, seg_info] = prep.segment_task(EEG, ...
-%       'Markers', {'stim_on', 'resp'}, ...
-%       'TimeWindow', [-200 800], ...
-%       'LogFile', 'task_segmentation_log.txt');
-%   disp('Task data segmented.');
-%   disp('Epochs created per marker:');
-%   disp(seg_info.epochs_created);
-%   disp(['Total epochs: ', num2str(seg_info.total_epochs)]);
+% Side effects
+%   state.EEG updated; history includes epochs_created/total_epochs.
 %
-%   % Example 2: Segment with a different time window (with pipeline)
-%   % Assuming 'pipe' is an initialized pipeline object
-%   pipe = pipe.addStep(@prep.segment_task, ...
-%       'Markers', {'trial_start'}, ...
-%       'TimeWindow', [-1000 2000], ...
-%       'LogFile', p.LogFile); %% p.LogFile from pipeline parameters
-%   % Then run the pipeline: [EEG_processed, results] = pipe.run(EEG);
-%   disp('Task data segmented via pipeline.');
+% Usage
+%   state = prep.segment_task(state, struct('Markers',{'stim_on','resp'},'TimeWindow',[-200 800]));
 %
-% See also: pop_epoch
+% See also: pop_epoch, eeg_checkset
 
-    % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'segment_task';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('Markers', {}, @iscellstr);
     p.addParameter('TimeWindow', [], @(x) isnumeric(x) && numel(x) == 2);
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
+    nv = state_struct2nv(params);
 
-    p.parse(EEG, varargin{:});
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
+
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
 
     out = struct();
     out.epochs_created = struct();
 
     if isempty(R.Markers) || isempty(R.TimeWindow)
         logPrint(R.LogFile, '[segment_task] Markers or TimeWindow is empty, skipping task segmentation.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
     timeWindow_sec = R.TimeWindow / 1000;
-
     logPrint(R.LogFile, '[segment_task] ------ Segmenting task data ------');
     logPrint(R.LogFile, sprintf('[segment_task] Markers: %s, Time window: [%.2f %.2f]s', strjoin(R.Markers, ', '), timeWindow_sec(1), timeWindow_sec(2)));
 
-    % Segment the data into epochs
     logPrint(R.LogFile, '[segment_task] Calling pop_epoch to segment data...');
-    EEG = pop_epoch(EEG, R.Markers, timeWindow_sec, 'epochinfo', 'yes');
-    
-    if isempty(EEG.data)
-        logPrint(R.LogFile, '[segment_task error] EEG.data is empty.Timewindow is in ms. Please check your inputs');
+    state.EEG = pop_epoch(state.EEG, R.Markers, timeWindow_sec, 'epochinfo', 'yes');
+
+    if isempty(state.EEG.data)
+        logPrint(R.LogFile, '[segment_task error] EEG.data is empty. TimeWindow is in ms. Please check your inputs.');
     end
 
-    EEG = eeg_checkset(EEG);
-    % Log the number of epochs for each marker type (robust version)
-unique_markers = unique(R.Markers);
+    state.EEG = eeg_checkset(state.EEG);
 
-% Preprocess epoch event types to handle cell/char/numeric variations
-epoch_eventtypes = cell(1, EEG.trials);
-for e = 1:EEG.trials
-    et = EEG.epoch(e).eventtype;
-    if ~iscell(et), et = {et}; end
-    % Convert all entries to char strings
-    et = cellfun(@(x) char(string(x)), et, 'UniformOutput', false);
-    epoch_eventtypes{e} = et;
-end
+    unique_markers = unique(R.Markers);
+    epoch_eventtypes = cell(1, state.EEG.trials);
+    for e = 1:state.EEG.trials
+        et = state.EEG.epoch(e).eventtype;
+        if ~iscell(et), et = {et}; end
+        et = cellfun(@(x) char(string(x)), et, 'UniformOutput', false);
+        epoch_eventtypes{e} = et;
+    end
 
-for i = 1:numel(unique_markers)
-    marker = unique_markers{i};
-    % Count epochs containing this marker
-    n_epochs = sum(cellfun(@(et) any(strcmp(marker, et)), epoch_eventtypes));
-    % Sanitize field name (avoid '-' or spaces)
-    safe_marker = matlab.lang.makeValidName(marker, 'ReplacementStyle', 'underscore', 'Prefix', 'm_');
-    out.epochs_created.(safe_marker) = n_epochs;
-    logPrint(R.LogFile, sprintf('[segment_task] Created %d epochs for marker %s', n_epochs, marker));
-end
+    for i = 1:numel(unique_markers)
+        marker = unique_markers{i};
+        n_epochs = sum(cellfun(@(et) any(strcmp(marker, et)), epoch_eventtypes));
+        safe_marker = matlab.lang.makeValidName(marker, 'ReplacementStyle', 'underscore', 'Prefix', 'm_');
+        out.epochs_created.(safe_marker) = n_epochs;
+        logPrint(R.LogFile, sprintf('[segment_task] Created %d epochs for marker %s', n_epochs, marker));
+    end
 
-logPrint(R.LogFile, sprintf('[segment_task] Total epochs created: %d', EEG.trials));
-    out.total_epochs = EEG.trials;
-
+    logPrint(R.LogFile, sprintf('[segment_task] Total epochs created: %d', state.EEG.trials));
+    out.total_epochs = state.EEG.trials;
     logPrint(R.LogFile, '[segment_task] ------ Task segmentation complete ------');
 
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

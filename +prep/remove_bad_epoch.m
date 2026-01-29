@@ -1,71 +1,93 @@
-function [EEG, out] = remove_bad_epoch(EEG, varargin)
-% REMOVE_BAD_EPOCH  Detects and removes bad epochs from an EEG dataset.
-%   This function identifies bad epochs using EEGLAB's `pop_autorej` and
-%   the FASTER algorithm's `epoch_properties`. It then removes the
-%   identified bad epochs from the dataset.
+﻿function state = remove_bad_epoch(state, args, meta)
+%REMOVE_BAD_EPOCH Detect and remove bad epochs from epoched EEG.
 %
-% Syntax:
-%   [EEG, out] = prep.remove_bad_epoch(EEG, 'param', value, ...)
+% Purpose & behavior
+%   Uses pop_autorej and/or FASTER epoch_properties to flag bad epochs.
+%   Removes them via pop_select and maintains a stable TrialID mapping in
+%   EEG.etc.EEGdojo for traceability across QC steps.
 %
-% Input Arguments:
-%   EEG         - EEGLAB EEG structure (epoched data).
+% Flow/state contract
+%   Required input state fields:
+%     - state.EEG (epoched)
+%   Updated/created state fields:
+%     - state.EEG (epochs removed)
+%     - state.EEG.etc.EEGdojo.TrialID / RemainTrialID
+%     - state.EEG.etc.EEGdojo.BadEpochIdx / BadTrialID*
+%     - state.history
 %
-% Optional Parameters (Name-Value Pairs):
-%   'Autorej'           - (logical, default: true)
-%                         Enable epoch rejection using `pop_autorej`.
-%   'Autorej_MaxRej'    - (numeric, default: 2)
-%                         `maxrej` parameter for `pop_autorej`.
-%   'FASTER'            - (logical, default: true)
-%                         Enable epoch rejection using FASTER's `epoch_properties`.
-%   'LogFile'           - (char | string, default: '')
-%                         File path to log the results.
+% Inputs
+%   state (struct)
+%     - Flow state; see Flow/state contract above.
+%   args (struct)
+%     - Parameters for this operation (listed below). Merged with state.cfg.remove_bad_epoch if present.
+%   meta (struct, optional)
+%     - Pipeline meta; supports validate_only/logger.
 %
-% Output Arguments:
-%   EEG         - Modified EEGLAB EEG structure with bad epochs removed.
-%   out         - Structure containing details of the detection:
-%                 out.Bad.autorej: Indices of bad epochs from `pop_autorej`.
-%                 out.Bad.FASTER: Indices of bad epochs from FASTER.
-%                 out.Bad.all: Combined unique indices of all bad epochs.
-%                 out.summary: Summary of bad epochs per detector and total.
-
-% Adds robust bookkeeping for trial traceability across multiple QC stages:
-%   - EEG.etc.EEGdojo.TrialID: length(EEG.trials) vector mapping current epoch index
-%     -> original trial id (stable across subsequent rejections)
-%   - EEG.etc.EEGdojo.BadEpochIdx: bad epoch indices in CURRENT dataset space (this run)
-%   - EEG.etc.EEGdojo.BadTrialID_auto_thisrun: bad trial IDs in ORIGINAL space (this run)
-%   - EEG.etc.EEGdojo.BadTrialID_auto_all: accumulated unique bad trial IDs (original space)
-%   - EEG.etc.EEGdojo.RemainTrialID: same as TrialID after removal (for convenience)
+% Parameters
+%   - Autorej
+%       Type: logical; Default: true
+%       Enable pop_autorej detector.
+%   - Autorej_MaxRej
+%       Type: numeric; Default: 2
+%       maxrej for pop_autorej.
+%   - FASTER
+%       Type: logical; Default: true
+%       Enable FASTER epoch_properties detector.
+%   - LogFile
+%       Type: char|string; Default: ''
+%       Optional log file path.
+% Outputs
+%   state (struct)
+%     - Updated flow state (see Flow/state contract above).
+%
+% Side effects
+%   state.EEG updated; history includes Bad/summary.
+%
+% Usage
+%   state = prep.remove_bad_epoch(state, struct('Autorej',true,'FASTER',true));
 %
 % See also: pop_autorej, epoch_properties, pop_select
 
-     % ----------------- Parse inputs -----------------
+    if nargin < 1 || isempty(state), state = struct(); end
+    if nargin < 2 || isempty(args), args = struct(); end
+    if nargin < 3 || isempty(meta), meta = struct(); end
+
+    op = 'remove_bad_epoch';
+    cfg = state_get_config(state, op);
+    params = state_merge(cfg, args);
+
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('Autorej', true, @islogical);
     p.addParameter('Autorej_MaxRej', 2, @isnumeric);
     p.addParameter('FASTER', true, @islogical);
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
-    p.parse(EEG, varargin{:});
+    nv = state_struct2nv(params);
+
+    state_require_eeg(state, op);
+    p.parse(state.EEG, nv{:});
     R = p.Results;
 
-    out = struct(); % Initialize out struct
+    if isfield(meta, 'validate_only') && meta.validate_only
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
+        return;
+    end
+
+    EEG = state.EEG;
+    out = struct();
     logPrint(R.LogFile, 'Identifying bad epochs...');
 
-    % ----------------- Ensure EEG.etc.EEGdojo + TrialID mapping -----------------
     if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc), EEG.etc = struct(); end
     if ~isfield(EEG.etc, 'EEGdojo') || ~isstruct(EEG.etc.EEGdojo), EEG.etc.EEGdojo = struct(); end
 
     nTrials = EEG.trials;
     EEG.urevent = EEG.event;
-    % Initialize stable original trial id mapping if missing
     if ~isfield(EEG.etc.EEGdojo, 'TrialID') || isempty(EEG.etc.EEGdojo.TrialID)
         EEG.etc.EEGdojo.TrialID = (1:nTrials)';
         EEG.etc.EEGdojo.OrigNTrials = nTrials;
         logPrint(R.LogFile, sprintf('[remove_bad_epoch] Initialized EEGdojo.TrialID (1..%d).', nTrials));
     else
-        % Sanity check
         if numel(EEG.etc.EEGdojo.TrialID) ~= nTrials
-            % Fallback: re-init, but warn (mapping may be invalid if prior steps deleted epochs without updating TrialID)
             logPrint(R.LogFile, sprintf(['[remove_bad_epoch] WARNING: EEGdojo.TrialID length (%d) ~= EEG.trials (%d). ' ...
                                          'Re-initializing TrialID to 1..%d (traceability may be compromised).'], ...
                                          numel(EEG.etc.EEGdojo.TrialID), nTrials, nTrials));
@@ -77,15 +99,13 @@ function [EEG, out] = remove_bad_epoch(EEG, varargin)
         end
     end
 
-    TrialID = EEG.etc.EEGdojo.TrialID(:); % current->original mapping (column)
-
-    % ----------------- Run Detectors -----------------
+    TrialID = EEG.etc.EEGdojo.TrialID(:);
     Bad = struct();
 
     if R.Autorej
         logPrint(R.LogFile, '[remove_bad_epoch] Running pop_autorej detector...');
         [~, Bad.autorej] = pop_autorej(EEG, 'nogui', 'on', 'maxrej', R.Autorej_MaxRej);
-        Bad.autorej = Bad.autorej(:)'; % row
+        Bad.autorej = Bad.autorej(:)';
     else
         Bad.autorej = [];
     end
@@ -94,14 +114,13 @@ function [EEG, out] = remove_bad_epoch(EEG, varargin)
         logPrint(R.LogFile, '[remove_bad_epoch] Running FASTER detector...');
         epoch_list = epoch_properties(EEG, 1:EEG.nbchan);
         Bad.FASTER = find(min_z(epoch_list) == 1)';
-        Bad.FASTER = Bad.FASTER(:)'; % row
+        Bad.FASTER = Bad.FASTER(:)';
     else
         Bad.FASTER = [];
     end
 
-    % ----------------- Combine & Summarize -----------------
     Bad.all = unique([Bad.autorej, Bad.FASTER]);
-    Bad.all = Bad.all(Bad.all >= 1 & Bad.all <= nTrials); % guard
+    Bad.all = Bad.all(Bad.all >= 1 & Bad.all <= nTrials);
 
     summary = struct();
     summary.autorej = numel(Bad.autorej);
@@ -112,10 +131,8 @@ function [EEG, out] = remove_bad_epoch(EEG, varargin)
     logPrint(R.LogFile, sprintf('Bad Epochs Identified by FASTER: %d\nDetails: %s', summary.FASTER,  mat2str(Bad.FASTER)));
     logPrint(R.LogFile, sprintf('Total Unique Bad Epochs: %d\nDetails: %s\n', summary.Total, mat2str(Bad.all)));
 
-    % Map CURRENT bad epoch indices -> ORIGINAL trial IDs (stable)
-    Bad.trial_id = TrialID(Bad.all)'; % row in original space
+    Bad.trial_id = TrialID(Bad.all)';
 
-    % ----------------- Action: Remove -----------------
     if ~isempty(Bad.all)
         logPrint(R.LogFile, sprintf('[remove_bad_epoch] Removing %d bad epochs...', summary.Total));
 
@@ -126,33 +143,28 @@ function [EEG, out] = remove_bad_epoch(EEG, varargin)
         EEG = pop_select(EEG, 'notrial', Bad.all);
         EEG = eeg_checkset(EEG);
 
-        % Update TrialID mapping to match the post-removal dataset
         EEG.etc.EEGdojo.TrialID = TrialID(keepIdx);
-        EEG.etc.EEGdojo.RemainTrialID = EEG.etc.EEGdojo.TrialID; % alias for convenience
+        EEG.etc.EEGdojo.RemainTrialID = EEG.etc.EEGdojo.TrialID;
 
         logPrint(R.LogFile, '[remove_bad_epoch] Bad epochs removed successfully.');
     else
         logPrint(R.LogFile, '[remove_bad_epoch] No bad epochs to remove.');
-        EEG.etc.EEGdojo.RemainTrialID = TrialID; % unchanged
+        EEG.etc.EEGdojo.RemainTrialID = TrialID;
     end
 
-    % ----------------- Bookkeeping in EEG.etc -----------------
     out.Bad = Bad;
     out.summary = summary;
 
-    % Keep your original fields, but make them explicit about indexing space
-    EEG.etc.EEGdojo.BadEpochIdx = Bad.all; % CURRENT dataset indices (this run)
+    EEG.etc.EEGdojo.BadEpochIdx = Bad.all;
     EEG.etc.EEGdojo.BadEpochSummary = summary;
-
-    % Store original-space IDs for modeling alignment
     EEG.etc.EEGdojo.BadTrialID_auto_thisrun = Bad.trial_id;
-
-    % Accumulate across multiple calls (optional but useful)
     if ~isfield(EEG.etc.EEGdojo, 'BadTrialID_auto_all') || isempty(EEG.etc.EEGdojo.BadTrialID_auto_all)
         EEG.etc.EEGdojo.BadTrialID_auto_all = unique(Bad.trial_id);
     else
         EEG.etc.EEGdojo.BadTrialID_auto_all = unique([EEG.etc.EEGdojo.BadTrialID_auto_all(:); Bad.trial_id(:)]);
-        EEG.etc.EEGdojo.BadTrialID_auto_all = EEG.etc.EEGdojo.BadTrialID_auto_all(:)'; % row
+        EEG.etc.EEGdojo.BadTrialID_auto_all = EEG.etc.EEGdojo.BadTrialID_auto_all(:)';
     end
 
+    state.EEG = EEG;
+    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end
