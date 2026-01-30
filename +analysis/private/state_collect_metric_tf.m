@@ -1,5 +1,5 @@
-function [stack, n] = state_collect_metric_tfr(state, subject_ids, condition_name, metric)
-%STATE_COLLECT_METRIC_TFR Collect TFR metrics into [chan x f x t x subj].
+function [stack, n] = state_collect_metric_tf(state, subject_ids, condition_name, metric)
+%STATE_COLLECT_METRIC_TF Collect TF metrics into [chan x f x t x subj].
     stack = [];
     n = 0;
 

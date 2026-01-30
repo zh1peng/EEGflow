@@ -1,4 +1,4 @@
-function state = tfr_band_stats(state, args, ~)
+function state = tf_band_stats(state, args, ~)
     % Args: contrast, roi, band, paired (bool), alpha, time_window (opt)
     if ~isfield(args, 'paired'), args.paired = false; end
     if ~isfield(args, 'alpha'), args.alpha = 0.05; end
@@ -31,8 +31,8 @@ function state = tfr_band_stats(state, args, ~)
     subs_p = state.Selection.Groups.(def.positive_term{1});
     subs_n = state.Selection.Groups.(def.negative_term{1});
 
-    [Xp, ~] = state_collect_metric_tfr(state, subs_p, def.positive_term{2}, 'power');
-    [Xn, ~] = state_collect_metric_tfr(state, subs_n, def.negative_term{2}, 'power');
+    [Xp, ~] = state_collect_metric_tf(state, subs_p, def.positive_term{2}, 'power');
+    [Xn, ~] = state_collect_metric_tf(state, subs_n, def.negative_term{2}, 'power');
     if isempty(Xp) || isempty(Xn)
         error('No data found for contrast terms.');
     end

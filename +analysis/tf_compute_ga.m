@@ -1,4 +1,4 @@
-function state = tfr_compute_ga(state, args, ~)
+function state = tf_compute_ga(state, args, ~)
     % Args: metric (default 'power')
     if nargin < 2 || isempty(args), args = struct(); end
     if ~isfield(args, 'metric'), args.metric = 'power'; end
@@ -17,7 +17,7 @@ function state = tfr_compute_ga(state, args, ~)
         for c = 1:numel(state.Selection.Conditions)
             cn = state.Selection.Conditions{c};
 
-            [stack, n] = state_collect_metric_tfr(state, subs, cn, args.metric);
+            [stack, n] = state_collect_metric_tf(state, subs, cn, args.metric);
             if isempty(stack)
                 warning('No data for %s:%s', gn, cn);
                 continue;

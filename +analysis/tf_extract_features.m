@@ -1,4 +1,4 @@
-function [state, T] = tfr_extract_features(state, args, ~)
+function [state, T] = tf_extract_features(state, args, ~)
     % Args: roi, band, window, metric, metrics (cell), per_subject (bool)
     if ~isfield(args, 'metrics'), args.metrics = {'mean'}; end
     if ~iscell(args.metrics), args.metrics = {args.metrics}; end
@@ -34,7 +34,7 @@ function [state, T] = tfr_extract_features(state, args, ~)
             subs = state.Selection.Groups.(gn);
             for c = 1:numel(state.Selection.Conditions)
                 cn = state.Selection.Conditions{c};
-                [stack, ~] = state_collect_metric_tfr(state, subs, cn, args.metric);
+                [stack, ~] = state_collect_metric_tf(state, subs, cn, args.metric);
                 if isempty(stack), continue; end
 
                 roiX = squeeze(mean(stack(ch_idx, :, :, :), 1));   % [f x t x subj]
@@ -50,7 +50,7 @@ function [state, T] = tfr_extract_features(state, args, ~)
         end
     else
         if ~isfield(state.Results, 'GA_TFD') || isempty(fieldnames(state.Results.GA_TFD))
-            state = tfr_compute_ga(state, struct('metric', args.metric), struct());
+            state = tf_compute_ga(state, struct('metric', args.metric), struct());
         end
         gnames = fieldnames(state.Results.GA_TFD);
         for g = 1:numel(gnames)

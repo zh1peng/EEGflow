@@ -1,4 +1,4 @@
-function state = tfr_init(dataset)
+function state = tf_init(dataset)
     if ~isa(dataset, 'analysis.Dataset')
         error('Input must be an analysis.Dataset');
     end

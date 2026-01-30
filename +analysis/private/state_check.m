@@ -11,15 +11,15 @@ function state_check(state, req_field)
         switch req_field
             case 'ERPs'
                 if ~isfield(state.Results, 'ERPs') || isempty(fieldnames(state.Results.ERPs))
-                    error('analysis_state:MissingResult', 'Subject ERPs not found. Run compute_erps first.');
+                    error('analysis_state:MissingResult', 'Subject ERPs not found. Run erp_compute_erps first.');
                 end
             case 'GA'
                 if ~isfield(state.Results, 'GA') || isempty(fieldnames(state.Results.GA))
-                    error('analysis_state:MissingResult', 'Grand Averages not found. Run compute_ga first.');
+                    error('analysis_state:MissingResult', 'Grand Averages not found. Run erp_compute_ga first.');
                 end
             case 'GA_TFD'
                 if ~isfield(state.Results, 'GA_TFD') || isempty(fieldnames(state.Results.GA_TFD))
-                    error('analysis_state:MissingResult', 'TF Grand Averages not found. Run tfr_compute_ga first.');
+                    error('analysis_state:MissingResult', 'TF Grand Averages not found. Run tf_compute_ga first.');
                 end
             case 'Contrasts'
                 if ~isfield(state.Results, 'Contrasts') || isempty(fieldnames(state.Results.Contrasts))

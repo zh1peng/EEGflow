@@ -1,5 +1,5 @@
-function state = erp_define_time_window(state, args, ~)
-%ERP_DEFINE_TIME_WINDOW Define a named time window.
+function state = define_time_window(state, args, ~)
+%DEFINE_TIME_WINDOW Define a named time window.
 % Args: name (char), range (1x2 numeric)
 
     name = args.name;

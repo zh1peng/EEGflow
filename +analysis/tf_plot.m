@@ -1,4 +1,4 @@
-function state = tfr_plot(state, args, meta)
+function state = tf_plot(state, args, meta)
     % Args: target, group (opt), condition (opt), x_range, freq_range, color_range, mask
     if ~isfield(args, 'group'), args.group = ''; end
     if ~isfield(args, 'condition'), args.condition = ''; end

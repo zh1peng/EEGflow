@@ -1,5 +1,5 @@
-function state = erp_define_roi(state, args, ~)
-%ERP_DEFINE_ROI Define an ROI for ERP analysis.
+function state = define_roi(state, args, ~)
+%DEFINE_ROI Define an ROI for analysis.
 % Args: name (char), labels (cellstr)
 
     state_check(state);

@@ -1,4 +1,4 @@
-function state = tfr_define_contrast(state, args, ~)
+function state = tf_define_contrast(state, args, ~)
     % Args: name, pos_term {Group, Cond}, neg_term {Group, Cond}
     name = args.name;
     pos = args.pos_term;

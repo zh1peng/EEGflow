@@ -204,7 +204,10 @@ function Out_tfd = run_tfr(dataset, varargin)
     for i = 1:numel(results_cell)
         res = results_cell{i};
         if ~isempty(res) && isfield(res, 'power')
-            sub_field = ['sub_' res.subject_id];
+            sub_field = res.subject_id;
+            if ~startsWith(sub_field, 'sub_')
+                sub_field = ['sub_' sub_field];
+            end
             Out_tfd.(sub_field).(res.condition).power    = res.power;     % [chan x f x t]
             Out_tfd.(sub_field).(res.condition).itc      = res.itc;       % [chan x f x t]
             Out_tfd.(sub_field).(res.condition).ntrials  = res.ntrials;

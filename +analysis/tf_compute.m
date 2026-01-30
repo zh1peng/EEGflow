@@ -1,4 +1,4 @@
-function state = tfr_compute(state, args, meta)
+function state = tf_compute(state, args, meta)
     % Args:
     %   tlimits (ms), freqs (Hz), cycles, padratio (newtimef params)
     %   baseline (ms), timesout (num points)
