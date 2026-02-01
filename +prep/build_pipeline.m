@@ -4,8 +4,7 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
 % Usage:
 %   [pipe, state, cfg] = prep.build_pipeline(cfgOrPath);
 %   [pipe, state, cfg] = prep.build_pipeline(cfgOrPath, 'State', state, 'Registry', reg);
-%   [pipe, state, cfg] = prep.build_pipeline(cfgOrPath, 'ConfigureIO', true, ...
-%       'ConfigureIOArgs', {'Suffix','_cleaned'});
+%   [pipe, state, cfg] = prep.build_pipeline(cfgOrPath);
 %
 % Inputs:
 %   cfgOrPath   config struct OR path to JSON (loaded via flow.load_cfg)
@@ -13,8 +12,6 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
 % Options:
 %   'State'            : Initial state struct (default: struct())
 %   'Registry'         : containers.Map registry (default: prep private registry)
-%   'ConfigureIO'      : Apply prep.setup_io to cfg (default: true)
-%   'ConfigureIOArgs'  : NV args passed to prep.setup_io (default: {})
 %   'WhenEvaluatorFn'  : @(exprString, state) for string "when" (default: [])
 %
 % Output:
@@ -25,8 +22,6 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
     ip = inputParser;
     addParameter(ip, 'State', struct(), @isstruct);
     addParameter(ip, 'Registry', [], @(x) isempty(x) || isa(x, 'containers.Map'));
-    addParameter(ip, 'ConfigureIO', true, @(x) islogical(x) && isscalar(x));
-    addParameter(ip, 'ConfigureIOArgs', {}, @(x) iscell(x) || isstruct(x));
     addParameter(ip, 'WhenEvaluatorFn', [], @(x) isempty(x) || isa(x,'function_handle'));
     parse(ip, varargin{:});
     opt = ip.Results;
@@ -38,15 +33,6 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
         cfg = cfgIn;
     else
         error('prep:build_pipeline:BadConfig', 'cfgOrPath must be a struct or a JSON path.');
-    end
-
-    % --- optional IO configuration ---
-    if opt.ConfigureIO && (isfield(cfg,'Input') || isfield(cfg,'Output'))
-        ioArgs = opt.ConfigureIOArgs;
-        if isstruct(ioArgs)
-            ioArgs = local_struct2nv(ioArgs);
-        end
-        cfg = prep.setup_io(cfg, ioArgs{:});
     end
 
     % --- extract steps ---
@@ -121,11 +107,3 @@ function args = local_inject_defaults(op, args, cfg)
     % filename/filepath are populated by prep.setup_io (do not inject here)
 end
 
-function nv = local_struct2nv(s)
-    f = fieldnames(s);
-    nv = cell(1, numel(f)*2);
-    for k = 1:numel(f)
-        nv{2*k-1} = f{k};
-        nv{2*k}   = s.(f{k});
-    end
-end

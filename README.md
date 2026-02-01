@@ -100,7 +100,7 @@ cfg = prep.setup_io(cfg, ...
     'Suffix', '_cleaned');
 
 % Build pipeline (prep registry is used by default)
-[pipe, state, cfg] = prep.build_pipeline(cfg, 'ConfigureIO', false);
+[pipe, state, cfg] = prep.build_pipeline(cfg);
 
 % Run
 [state_out, report] = pipe.run('stop_on_error', true);
@@ -125,7 +125,7 @@ end
 
 ```matlab
 reg = prep.register_new_op('my_step', @my_step);
-[pipe, state, cfg] = prep.build_pipeline(cfg, 'Registry', reg, 'ConfigureIO', false);
+[pipe, state, cfg] = prep.build_pipeline(cfg, 'Registry', reg);
 ```
 
 3) Add it to JSON:
