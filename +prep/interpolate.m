@@ -1,4 +1,4 @@
-﻿function state = interpolate(state, args, meta)
+function state = interpolate(state, args, meta)
 %INTERPOLATE Interpolate missing channels using original channel locations.
 %
 % Purpose & behavior
@@ -59,7 +59,7 @@
         return;
     end
 
-    logPrint(R.LogFile, '[interpolate] Starting channel interpolation.');
+    log_step(state, meta, R.LogFile, '[interpolate] Starting channel interpolation.');
 
     if ~isfield(state.EEG, 'urchanlocs') || isempty(state.EEG.urchanlocs)
         error('[interpolate] No original channel locations (EEG.urchanlocs) found.');
@@ -70,15 +70,15 @@
     chans_to_interp = setdiff(original_chans, current_chans);
 
     if isempty(chans_to_interp)
-        logPrint(R.LogFile, '[interpolate] Skipping interpolation: No channels to interpolate found.');
+        log_step(state, meta, R.LogFile, '[interpolate] Skipping interpolation: No channels to interpolate found.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
-    logPrint(R.LogFile, sprintf('[interpolate] Interpolating %d channels: %s', numel(chans_to_interp), strjoin(chans_to_interp, ', ')));
+    log_step(state, meta, R.LogFile, sprintf('[interpolate] Interpolating %d channels: %s', numel(chans_to_interp), strjoin(chans_to_interp, ', ')));
     state.EEG = pop_interp(state.EEG, state.EEG.urchanlocs, 'spherical');
     state.EEG = eeg_checkset(state.EEG);
-    logPrint(R.LogFile, '[interpolate] Interpolation complete.');
+    log_step(state, meta, R.LogFile, '[interpolate] Interpolation complete.');
 
     out = struct('interpolated_channels', chans_to_interp);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

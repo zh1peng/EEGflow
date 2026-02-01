@@ -1,4 +1,4 @@
-﻿function state = remove_bad_epoch(state, args, meta)
+function state = remove_bad_epoch(state, args, meta)
 %REMOVE_BAD_EPOCH Detect and remove bad epochs from epoched EEG.
 %
 % Purpose & behavior
@@ -75,7 +75,7 @@
 
     EEG = state.EEG;
     out = struct();
-    logPrint(R.LogFile, 'Identifying bad epochs...');
+    log_step(state, meta, R.LogFile, 'Identifying bad epochs...');
 
     if ~isfield(EEG, 'etc') || ~isstruct(EEG.etc), EEG.etc = struct(); end
     if ~isfield(EEG.etc, 'EEGdojo') || ~isstruct(EEG.etc.EEGdojo), EEG.etc.EEGdojo = struct(); end
@@ -85,10 +85,10 @@
     if ~isfield(EEG.etc.EEGdojo, 'TrialID') || isempty(EEG.etc.EEGdojo.TrialID)
         EEG.etc.EEGdojo.TrialID = (1:nTrials)';
         EEG.etc.EEGdojo.OrigNTrials = nTrials;
-        logPrint(R.LogFile, sprintf('[remove_bad_epoch] Initialized EEGdojo.TrialID (1..%d).', nTrials));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_epoch] Initialized EEGdojo.TrialID (1..%d).', nTrials));
     else
         if numel(EEG.etc.EEGdojo.TrialID) ~= nTrials
-            logPrint(R.LogFile, sprintf(['[remove_bad_epoch] WARNING: EEGdojo.TrialID length (%d) ~= EEG.trials (%d). ' ...
+            log_step(state, meta, R.LogFile, sprintf(['[remove_bad_epoch] WARNING: EEGdojo.TrialID length (%d) ~= EEG.trials (%d). ' ...
                                          'Re-initializing TrialID to 1..%d (traceability may be compromised).'], ...
                                          numel(EEG.etc.EEGdojo.TrialID), nTrials, nTrials));
             EEG.etc.EEGdojo.TrialID = (1:nTrials)';
@@ -103,7 +103,7 @@
     Bad = struct();
 
     if R.Autorej
-        logPrint(R.LogFile, '[remove_bad_epoch] Running pop_autorej detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_epoch] Running pop_autorej detector...');
         [~, Bad.autorej] = pop_autorej(EEG, 'nogui', 'on', 'maxrej', R.Autorej_MaxRej);
         Bad.autorej = Bad.autorej(:)';
     else
@@ -111,7 +111,7 @@
     end
 
     if R.FASTER
-        logPrint(R.LogFile, '[remove_bad_epoch] Running FASTER detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_epoch] Running FASTER detector...');
         epoch_list = epoch_properties(EEG, 1:EEG.nbchan);
         Bad.FASTER = find(min_z(epoch_list) == 1)';
         Bad.FASTER = Bad.FASTER(:)';
@@ -127,14 +127,14 @@
     summary.FASTER  = numel(Bad.FASTER);
     summary.Total   = numel(Bad.all);
 
-    logPrint(R.LogFile, sprintf('Bad Epochs Identified by Auto Reject: %d\nDetails: %s', summary.autorej, mat2str(Bad.autorej)));
-    logPrint(R.LogFile, sprintf('Bad Epochs Identified by FASTER: %d\nDetails: %s', summary.FASTER,  mat2str(Bad.FASTER)));
-    logPrint(R.LogFile, sprintf('Total Unique Bad Epochs: %d\nDetails: %s\n', summary.Total, mat2str(Bad.all)));
+    log_step(state, meta, R.LogFile, sprintf('Bad Epochs Identified by Auto Reject: %d\nDetails: %s', summary.autorej, mat2str(Bad.autorej)));
+    log_step(state, meta, R.LogFile, sprintf('Bad Epochs Identified by FASTER: %d\nDetails: %s', summary.FASTER,  mat2str(Bad.FASTER)));
+    log_step(state, meta, R.LogFile, sprintf('Total Unique Bad Epochs: %d\nDetails: %s\n', summary.Total, mat2str(Bad.all)));
 
     Bad.trial_id = TrialID(Bad.all)';
 
     if ~isempty(Bad.all)
-        logPrint(R.LogFile, sprintf('[remove_bad_epoch] Removing %d bad epochs...', summary.Total));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_epoch] Removing %d bad epochs...', summary.Total));
 
         keepMask = true(nTrials, 1);
         keepMask(Bad.all) = false;
@@ -146,9 +146,9 @@
         EEG.etc.EEGdojo.TrialID = TrialID(keepIdx);
         EEG.etc.EEGdojo.RemainTrialID = EEG.etc.EEGdojo.TrialID;
 
-        logPrint(R.LogFile, '[remove_bad_epoch] Bad epochs removed successfully.');
+        log_step(state, meta, R.LogFile, '[remove_bad_epoch] Bad epochs removed successfully.');
     else
-        logPrint(R.LogFile, '[remove_bad_epoch] No bad epochs to remove.');
+        log_step(state, meta, R.LogFile, '[remove_bad_epoch] No bad epochs to remove.');
         EEG.etc.EEGdojo.RemainTrialID = TrialID;
     end
 

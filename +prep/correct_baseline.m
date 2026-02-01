@@ -1,4 +1,4 @@
-﻿function state = correct_baseline(state, args, meta)
+function state = correct_baseline(state, args, meta)
 %CORRECT_BASELINE Apply baseline correction to state.EEG.
 %
 % Purpose & behavior
@@ -64,22 +64,22 @@
     end
 
     if isempty(R.BaselineWindow)
-        logPrint(R.LogFile, '[correct_baseline] BaselineWindow is empty, skipping baseline correction.');
+        log_step(state, meta, R.LogFile, '[correct_baseline] BaselineWindow is empty, skipping baseline correction.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
-    logPrint(R.LogFile, '[correct_baseline] Starting baseline correction.');
-    logPrint(R.LogFile, sprintf('[correct_baseline] Baseline window: [%d %d] ms', R.BaselineWindow(1), R.BaselineWindow(2)));
+    log_step(state, meta, R.LogFile, '[correct_baseline] Starting baseline correction.');
+    log_step(state, meta, R.LogFile, sprintf('[correct_baseline] Baseline window: [%d %d] ms', R.BaselineWindow(1), R.BaselineWindow(2)));
 
     if state.EEG.trials > 1
-        logPrint(R.LogFile, '[correct_baseline] Applying baseline correction to epoched data.');
+        log_step(state, meta, R.LogFile, '[correct_baseline] Applying baseline correction to epoched data.');
     else
-        logPrint(R.LogFile, '[correct_baseline] Applying baseline correction to continuous data.');
+        log_step(state, meta, R.LogFile, '[correct_baseline] Applying baseline correction to continuous data.');
     end
     state.EEG = pop_rmbase(state.EEG, R.BaselineWindow);
     state.EEG = eeg_checkset(state.EEG);
-    logPrint(R.LogFile, '[correct_baseline] Baseline correction complete.');
+    log_step(state, meta, R.LogFile, '[correct_baseline] Baseline correction complete.');
 
     out = struct('baseline_window_ms', R.BaselineWindow);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

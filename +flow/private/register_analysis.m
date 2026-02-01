@@ -13,7 +13,6 @@ function register_analysis(reg)
     register_op(reg, 'erp_plot_topo',          @analysis.erp_plot_topo);
     register_op(reg, 'erp_extract_feature',    @analysis.erp_extract_feature);
 
-    register_op(reg, 'tf_init',            @analysis.tf_init);
     register_op(reg, 'tf_compute',         @analysis.tf_compute);
     register_op(reg, 'tf_compute_ga',      @analysis.tf_compute_ga);
     register_op(reg, 'tf_define_band',     @analysis.tf_define_band);

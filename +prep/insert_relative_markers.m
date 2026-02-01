@@ -1,4 +1,4 @@
-﻿function state = insert_relative_markers(state, args, meta)
+function state = insert_relative_markers(state, args, meta)
 %INSERT_RELATIVE_MARKERS Insert new markers at latencies relative to a reference event.
 %
 % Purpose & behavior
@@ -187,6 +187,6 @@
         out.mode = 'ref+startOffset';
     end
 
-    logPrint(LogFile, sprintf('[insert_relative_markers] Inserted markers: start=%s end=%s', NewStartMarker, NewEndMarker));
+    log_step(state, meta, LogFile, sprintf('[insert_relative_markers] Inserted markers: start=%s end=%s', NewStartMarker, NewEndMarker));
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

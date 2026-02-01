@@ -1,4 +1,4 @@
-﻿function state = load_set(state, args, meta)
+function state = load_set(state, args, meta)
 %LOAD_SET Load an EEGLAB .set dataset into the flow state.
 %
 % Purpose & behavior
@@ -30,7 +30,7 @@
 %       Folder containing the file.
 %   - LogFile
 %       Type: char; Default: ''
-%       If non-empty, logPrint writes progress to this file; otherwise to console.
+%       If non-empty, logs are appended to this file and also sent to the pipeline logger.
 % Example args
 %   args = struct('filename','sub-101_task-mid_run-01_eeg.set','filepath','/data');
 %
@@ -71,12 +71,12 @@
         return;
     end
 
-    state_log(meta, sprintf('[load_set] Loading dataset: %s/%s', R.filepath, R.filename));
+    state = log_step(state, meta, R.LogFile, sprintf('[load_set] Loading dataset: %s/%s', R.filepath, R.filename));
     EEG = pop_loadset('filename', R.filename, 'filepath', R.filepath);
     EEG = eeg_checkset(EEG);
     state.EEG = EEG;
     out = struct('loadedFile', fullfile(R.filepath, R.filename));
-    state_log(meta, sprintf('[load_set] Dataset loaded %s/%s', R.filepath, R.filename));
+    state = log_step(state, meta, R.LogFile, sprintf('[load_set] Dataset loaded %s/%s', R.filepath, R.filename));
 
     state = state_update_history(state, op, R, 'success', out);
 end

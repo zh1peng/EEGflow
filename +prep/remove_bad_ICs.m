@@ -1,4 +1,4 @@
-﻿function state = remove_bad_ICs(state, args, meta)
+function state = remove_bad_ICs(state, args, meta)
 %REMOVE_BAD_ICS Detect and remove artifactual ICs from state.EEG.
 %
 % Purpose & behavior
@@ -127,7 +127,7 @@
     out.icaLabel = icaLabel;
 
     if R.FilterICAOn
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Applying high-pass filter at %.2f Hz before ICA...', R.FilterICALocutoff));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] Applying high-pass filter at %.2f Hz before ICA...', R.FilterICALocutoff));
         EEG_filt = pop_eegfiltnew(EEG, 'locutoff', R.FilterICALocutoff, 'plotfreqz', 0);
         EEG_filt = eeg_checkset(EEG_filt);
     else
@@ -135,7 +135,7 @@
     end
 
     if ~isfield(EEG_filt, 'icaweights') || isempty(EEG_filt.icaweights)
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Running ICA (%s)...', R.ICAType));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] Running ICA (%s)...', R.ICAType));
         EEG_filt = pop_runica(EEG_filt, 'icatype', R.ICAType, 'extended', 1);
     end
 
@@ -149,7 +149,7 @@
     used = {};
 
     if R.ICLabelOn
-        logPrint(R.LogFile, '[remove_bad_ICs] Running ICLabel...');
+        log_step(state, meta, R.LogFile, '[remove_bad_ICs] Running ICLabel...');
         EEG = pop_iclabel(EEG, 'default');
         class = EEG.etc.ic_classification.ICLabel.classifications;
         thr = R.ICLabelThreshold;
@@ -166,13 +166,13 @@
         end
         BadICs.ICLabel = find(bad)';
         used{end+1} = 'ICLabel';
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] ICLabel bad ICs: %s', mat2str(BadICs.ICLabel)));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] ICLabel bad ICs: %s', mat2str(BadICs.ICLabel)));
     else
         BadICs.ICLabel = [];
     end
 
     if R.FASTEROn
-        logPrint(R.LogFile, '[remove_bad_ICs] Running FASTER component properties...');
+        log_step(state, meta, R.LogFile, '[remove_bad_ICs] Running FASTER component properties...');
         if isempty(R.EOGChanLabel)
             eog_idx = [];
         else
@@ -181,13 +181,13 @@
         comp_list = component_properties(EEG, eog_idx, 1:EEG.nbchan);
         BadICs.FASTER = find(min_z(comp_list) == 1)';
         used{end+1} = 'FASTER';
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] FASTER bad ICs: %s', mat2str(BadICs.FASTER)));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] FASTER bad ICs: %s', mat2str(BadICs.FASTER)));
     else
         BadICs.FASTER = [];
     end
 
     if R.DetectECG && ~isempty(R.ECG_Struct)
-        logPrint(R.LogFile, '[remove_bad_ICs] Running ECG correlation detection...');
+        log_step(state, meta, R.LogFile, '[remove_bad_ICs] Running ECG correlation detection...');
         ecg_eeg = R.ECG_Struct;
         if ~isfield(ecg_eeg, 'data') || isempty(ecg_eeg.data)
             warning('[remove_bad_ICs] ECG_Struct has no data. Skipping ECG detection.');
@@ -209,7 +209,7 @@
             end
             BadICs.ECG = unique(bad);
             used{end+1} = 'ECG';
-            logPrint(R.LogFile, sprintf('[remove_bad_ICs] ECG-correlated bad ICs: %s', mat2str(BadICs.ECG)));
+            log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] ECG-correlated bad ICs: %s', mat2str(BadICs.ECG)));
         end
     else
         BadICs.ECG = [];
@@ -220,12 +220,12 @@
     out.detectors_used = used;
 
     if ~isempty(BadICs.all)
-        logPrint(R.LogFile, sprintf('[remove_bad_ICs] Removing %d bad ICs...', numel(BadICs.all)));
+        log_step(state, meta, R.LogFile, sprintf('[remove_bad_ICs] Removing %d bad ICs...', numel(BadICs.all)));
         EEG = pop_subcomp(EEG, BadICs.all, 0);
         EEG = eeg_checkset(EEG);
-        logPrint(R.LogFile, '[remove_bad_ICs] Bad ICs removed successfully.');
+        log_step(state, meta, R.LogFile, '[remove_bad_ICs] Bad ICs removed successfully.');
     else
-        logPrint(R.LogFile, '[remove_bad_ICs] No bad ICs to remove.');
+        log_step(state, meta, R.LogFile, '[remove_bad_ICs] No bad ICs to remove.');
     end
 
     EEG.etc.EEGdojo.(sprintf('BadICs_%s', icaLabel)) = BadICs;

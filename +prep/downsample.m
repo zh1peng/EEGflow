@@ -1,4 +1,4 @@
-﻿function state = downsample(state, args, meta)
+function state = downsample(state, args, meta)
 %DOWNSAMPLE Downsample state.EEG to a target sampling rate.
 %
 % Purpose & behavior
@@ -65,10 +65,10 @@
         return;
     end
 
-    logPrint(R.LogFile, sprintf('[downsample] Downsampling data to %d Hz.', R.Rate));
+    log_step(state, meta, R.LogFile, sprintf('[downsample] Downsampling data to %d Hz.', R.Rate));
     state.EEG = pop_resample(state.EEG, R.Rate);
     state.EEG = eeg_checkset(state.EEG);
-    logPrint(R.LogFile, sprintf('[downsample] Downsampling complete. New sampling rate: %d Hz.', state.EEG.srate));
+    log_step(state, meta, R.LogFile, sprintf('[downsample] Downsampling complete. New sampling rate: %d Hz.', state.EEG.srate));
 
     out = struct('new_sampling_rate', state.EEG.srate);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

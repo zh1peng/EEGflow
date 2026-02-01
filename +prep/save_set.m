@@ -1,4 +1,4 @@
-﻿function state = save_set(state, args, meta)
+function state = save_set(state, args, meta)
 %SAVE_SET Save state.EEG to disk as an EEGLAB .set.
 %
 % Purpose & behavior
@@ -28,7 +28,7 @@
 %       Output folder.
 %   - LogFile
 %       Type: char; Default: ''
-%       If non-empty, logPrint writes progress to this file; otherwise to console.
+%       If non-empty, logs are appended to this file and also sent to the pipeline logger.
 % Outputs
 %   state (struct)
 %     - Updated flow state (see Flow/state contract above).
@@ -66,10 +66,10 @@
     end
 
     state_require_eeg(state, op);
-    state_log(meta, sprintf('[save_set] Saving dataset: %s/%s', R.filepath, R.filename));
+    state = log_step(state, meta, R.LogFile, sprintf('[save_set] Saving dataset: %s/%s', R.filepath, R.filename));
     pop_saveset(state.EEG, 'filename', R.filename, 'filepath', R.filepath);
     out = struct('savedFile', fullfile(R.filepath, R.filename));
-    state_log(meta, sprintf('[save_set] Dataset saved: %s/%s', R.filepath, R.filename));
+    state = log_step(state, meta, R.LogFile, sprintf('[save_set] Dataset saved: %s/%s', R.filepath, R.filename));
 
     state = state_update_history(state, op, R, 'success', out);
 end

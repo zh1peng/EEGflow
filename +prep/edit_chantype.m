@@ -1,4 +1,4 @@
-﻿function state = edit_chantype(state, args, meta)
+function state = edit_chantype(state, args, meta)
 %EDIT_CHANTYPE Assign channel types in state.EEG (EEG/EOG/ECG/OTHER).
 %
 % Purpose & behavior
@@ -72,7 +72,7 @@
     end
 
     out = struct('types_set', struct('EEG', 0, 'EOG', 0, 'ECG', 0, 'OTHER', 0));
-    logPrint(R.LogFile, '[edit_chantype] Starting channel type editing.');
+    log_step(state, meta, R.LogFile, '[edit_chantype] Starting channel type editing.');
 
     for i = 1:state.EEG.nbchan
         state.EEG.chanlocs(i).type = 'EEG';
@@ -83,10 +83,10 @@
         state.EEG.chanlocs(eog_idx(i)).type = 'EOG';
     end
     if ~isempty(eog_idx)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Set %d channels to EOG: %s', length(eog_idx), strjoin(R.EOGLabel, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Set %d channels to EOG: %s', length(eog_idx), strjoin(R.EOGLabel, ', ')));
     end
     if ~isempty(eog_not_found)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Warning: EOG labels not found: %s', strjoin(eog_not_found, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Warning: EOG labels not found: %s', strjoin(eog_not_found, ', ')));
     end
 
     [ecg_idx, ecg_not_found] = chans2idx(state.EEG, R.ECGLabel, 'MustExist', false);
@@ -94,10 +94,10 @@
         state.EEG.chanlocs(ecg_idx(i)).type = 'ECG';
     end
     if ~isempty(ecg_idx)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Set %d channels to ECG: %s', length(ecg_idx), strjoin(R.ECGLabel, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Set %d channels to ECG: %s', length(ecg_idx), strjoin(R.ECGLabel, ', ')));
     end
     if ~isempty(ecg_not_found)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Warning: ECG labels not found: %s', strjoin(ecg_not_found, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Warning: ECG labels not found: %s', strjoin(ecg_not_found, ', ')));
     end
 
     [other_idx, other_not_found] = chans2idx(state.EEG, R.OtherLabel, 'MustExist', false);
@@ -105,10 +105,10 @@
         state.EEG.chanlocs(other_idx(i)).type = 'OTHER';
     end
     if ~isempty(other_idx)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Set %d channels to OTHER: %s', length(other_idx), strjoin(R.OtherLabel, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Set %d channels to OTHER: %s', length(other_idx), strjoin(R.OtherLabel, ', ')));
     end
     if ~isempty(other_not_found)
-        logPrint(R.LogFile, sprintf('[edit_chantype] Warning: OTHER labels not found: %s', strjoin(other_not_found, ', ')));
+        log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Warning: OTHER labels not found: %s', strjoin(other_not_found, ', ')));
     end
 
     all_non_eeg_idx = unique([eog_idx(:); ecg_idx(:); other_idx(:)]);
@@ -119,9 +119,9 @@
     out.types_set.OTHER = length(other_idx);
     out.types_set.EEG = length(eeg_idx);
 
-    logPrint(R.LogFile, sprintf('[edit_chantype] Total channels classified: EEG=%d, EOG=%d, ECG=%d, OTHER=%d', ...
+    log_step(state, meta, R.LogFile, sprintf('[edit_chantype] Total channels classified: EEG=%d, EOG=%d, ECG=%d, OTHER=%d', ...
         out.types_set.EEG, out.types_set.EOG, out.types_set.ECG, out.types_set.OTHER));
-    logPrint(R.LogFile, '[edit_chantype] Channel type editing complete.');
+    log_step(state, meta, R.LogFile, '[edit_chantype] Channel type editing complete.');
 
     state.EEG = eeg_checkset(state.EEG);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

@@ -1,4 +1,4 @@
-﻿function state = remove_powerline(state, args, meta)
+function state = remove_powerline(state, args, meta)
 %REMOVE_POWERLINE Remove line-noise harmonics from state.EEG.
 %
 % Purpose & behavior
@@ -77,7 +77,7 @@
         return;
     end
 
-    logPrint(R.LogFile, sprintf('[remove_powerline] --- Removing powerline noise using %s method ---', R.Method));
+    log_step(state, meta, R.LogFile, sprintf('[remove_powerline] --- Removing powerline noise using %s method ---', R.Method));
 
     fs = state.EEG.srate;
     nyq = fs/2;
@@ -89,26 +89,26 @@
 
     switch lower(R.Method)
         case 'cleanline'
-            logPrint(R.LogFile, sprintf('[remove_powerline] Applying CleanLine at Hz: %s', num2str(harm)));
+            log_step(state, meta, R.LogFile, sprintf('[remove_powerline] Applying CleanLine at Hz: %s', num2str(harm)));
             state.EEG = pop_cleanline(state.EEG, 'linefreqs', harm, 'newversion', 1);
             state.EEG = eeg_checkset(state.EEG);
-            logPrint(R.LogFile, '[remove_powerline] CleanLine complete.');
+            log_step(state, meta, R.LogFile, '[remove_powerline] CleanLine complete.');
         case 'notch'
-            logPrint(R.LogFile, sprintf('[remove_powerline] Applying FIR notch (+/-%.2f Hz) at Hz: %s', R.BW, num2str(harm)));
+            log_step(state, meta, R.LogFile, sprintf('[remove_powerline] Applying FIR notch (+/-%.2f Hz) at Hz: %s', R.BW, num2str(harm)));
             for f0 = harm
                 lo = max(f0 - R.BW, 0);
                 hi = min(f0 + R.BW, nyq);
                 if lo <= 0 || hi <= 0 || lo >= hi
-                    logPrint(R.LogFile, sprintf('[remove_powerline] Skipping malformed band [%.2f, %.2f] Hz for harmonic %.2f Hz.', lo, hi, f0));
+                    log_step(state, meta, R.LogFile, sprintf('[remove_powerline] Skipping malformed band [%.2f, %.2f] Hz for harmonic %.2f Hz.', lo, hi, f0));
                     continue;
                 end
                 state.EEG = pop_eegfiltnew(state.EEG, lo, hi, [], 1, [], 0);
                 state.EEG = eeg_checkset(state.EEG);
-                logPrint(R.LogFile, sprintf('[remove_powerline] Applied notch filter for %.2f Hz.', f0));
+                log_step(state, meta, R.LogFile, sprintf('[remove_powerline] Applied notch filter for %.2f Hz.', f0));
             end
-            logPrint(R.LogFile, '[remove_powerline] FIR notch complete.');
+            log_step(state, meta, R.LogFile, '[remove_powerline] FIR notch complete.');
     end
-    logPrint(R.LogFile, '[remove_powerline] --- Powerline noise removal complete ---');
+    log_step(state, meta, R.LogFile, '[remove_powerline] --- Powerline noise removal complete ---');
 
     out = struct('Method', lower(R.Method), 'Freq', R.Freq, 'NHarm', R.NHarm, 'BW', R.BW);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

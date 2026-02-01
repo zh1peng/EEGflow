@@ -5,7 +5,7 @@ function state_check(state, req_field)
         error('analysis_state:InvalidState', 'State must contain a valid analysis.Dataset.');
     end
     if ~isfield(state, 'Results')
-        error('analysis_state:InvalidState', 'State must contain a Results struct. Use analysis.init.');
+        error('analysis_state:InvalidState', 'State must contain a Results struct. Use analysis.init_state.');
     end
     if ~isempty(req_field)
         switch req_field

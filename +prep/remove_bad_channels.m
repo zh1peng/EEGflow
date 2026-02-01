@@ -1,4 +1,4 @@
-﻿function state = remove_bad_channels(state, args, meta)
+function state = remove_bad_channels(state, args, meta)
 %REMOVE_BAD_CHANNELS Detect and remove/flag bad channels in state.EEG.
 %
 % Purpose & behavior
@@ -207,7 +207,7 @@
     used = {};
 
     if R.Kurtosis
-        logPrint(R.LogFile, '[remove_bad_channels] Running Kurtosis detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running Kurtosis detector...');
         [~, idxRel] = pop_rejchan(EEG, 'elec', IdxDetect, 'threshold', R.Kurt_Threshold, 'norm', lower(R.NormOn), 'measure', 'kurt');
         Bad.Kurt = IdxDetect(idxRel);
         used{end+1} = 'Kurt';
@@ -217,7 +217,7 @@
     end
 
     if R.Spectrum
-        logPrint(R.LogFile, '[remove_bad_channels] Running Spectrum detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running Spectrum detector...');
         [~, idxRel] = pop_rejchan(EEG, 'elec', IdxDetect, 'threshold', R.Spec_Threshold, 'norm', lower(R.NormOn), 'measure', 'spec', 'freqrange', R.Spec_FreqRange);
         Bad.Spec = IdxDetect(idxRel);
         used{end+1} = 'Spec';
@@ -227,7 +227,7 @@
     end
 
     if R.Probability
-        logPrint(R.LogFile, '[remove_bad_channels] Running Probability detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running Probability detector...');
         [~, idxRel] = pop_rejchan(EEG, 'elec', IdxDetect, 'threshold', R.Prob_Threshold, 'norm', lower(R.NormOn), 'measure', 'prob');
         Bad.Prob = IdxDetect(idxRel);
         used{end+1} = 'Prob';
@@ -237,7 +237,7 @@
     end
 
     if R.FASTER_MeanCorr
-        logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Mean Correlation detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running FASTER Mean Correlation detector...');
         args2 = {'elec', IdxDetect, 'measure','meanCorr', 'threshold', R.FASTER_Threshold};
         if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
         if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
@@ -251,7 +251,7 @@
     end
 
     if R.FASTER_Variance
-        logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Variance detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running FASTER Variance detector...');
         args2 = {'elec', IdxDetect, 'measure','variance', 'threshold', R.FASTER_VarThreshold};
         if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
         if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
@@ -265,7 +265,7 @@
     end
 
     if R.FASTER_Hurst
-        logPrint(R.LogFile, '[remove_bad_channels] Running FASTER Hurst detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running FASTER Hurst detector...');
         args2 = {'elec', IdxDetect, 'measure','hurst', 'threshold', R.FASTER_HurstThreshold};
         if ~isempty(R.FASTER_RefChan), args2 = [args2, {'refchan', R.FASTER_RefChan}]; end
         if ~isempty(R.FASTER_Bandpass), args2 = [args2, {'bandpass', R.FASTER_Bandpass}]; end
@@ -279,7 +279,7 @@
     end
 
     if R.CleanRaw_Flatline
-        logPrint(R.LogFile, '[remove_bad_channels] Running CleanRaw Flatline detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running CleanRaw Flatline detector...');
         idx = cleanraw_rejchan(EEG, 'elec', IdxDetect, 'measure','flatline', 'threshold', R.Flatline_Sec, 'highpass', R.CleanDrift_Band);
         Bad.Flatline = idx(:)';
         used{end+1} = 'Flatline';
@@ -289,7 +289,7 @@
     end
 
     if R.CleanRaw_Noise
-        logPrint(R.LogFile, '[remove_bad_channels] Running CleanRaw Noise detector...');
+        log_step(state, meta, R.LogFile, '[remove_bad_channels] Running CleanRaw Noise detector...');
         idx = cleanraw_rejchan(EEG, 'elec', IdxDetect, 'measure','CleanChan', 'chancorr_crit', R.CleanChan_Corr, 'line_crit', R.CleanChan_Line, 'maxbadtime', R.CleanChan_MaxBad, 'num_samples', R.CleanChan_NSamp, 'highpass', R.CleanDrift_Band);
         Bad.CleanChan = idx(:)';
         used{end+1} = 'CleanChan';
@@ -312,25 +312,25 @@
     Bad.all = unique(allBad, 'stable');
     summary.Total = numel(Bad.all);
 
-    logPrint(R.LogFile, sprintf('[remove_bad_channels] Total bad channels identified: %d', summary.Total));
+    log_step(state, meta, R.LogFile, sprintf('[remove_bad_channels] Total bad channels identified: %d', summary.Total));
     logreport_badchannels(Bad, R.LogFile);
 
     switch lower(R.Action)
         case 'remove'
             if ~isempty(Bad.all)
-                logPrint(R.LogFile, sprintf('[remove_bad_channels] Removing %d bad channels...', summary.Total));
+                log_step(state, meta, R.LogFile, sprintf('[remove_bad_channels] Removing %d bad channels...', summary.Total));
                 EEG = pop_select(EEG, 'rmchannel', Bad.all);
                 EEG = eeg_checkset(EEG);
-                logPrint(R.LogFile, '[remove_bad_channels] Bad channels removed successfully.');
+                log_step(state, meta, R.LogFile, '[remove_bad_channels] Bad channels removed successfully.');
             else
-                logPrint(R.LogFile, '[remove_bad_channels] No bad channels to remove.');
+                log_step(state, meta, R.LogFile, '[remove_bad_channels] No bad channels to remove.');
             end
         case 'flag'
-            logPrint(R.LogFile, sprintf('[remove_bad_channels] Flagging %d bad channels...', summary.Total));
+            log_step(state, meta, R.LogFile, sprintf('[remove_bad_channels] Flagging %d bad channels...', summary.Total));
             mask = true(1, EEG.nbchan);
             mask(Bad.all(Bad.all>=1 & Bad.all<=EEG.nbchan)) = false;
             EEG.etc.clean_channel_mask = mask(:)';
-            logPrint(R.LogFile, '[remove_bad_channels] Bad channels flagged successfully.');
+            log_step(state, meta, R.LogFile, '[remove_bad_channels] Bad channels flagged successfully.');
     end
 
     out.Bad = Bad;

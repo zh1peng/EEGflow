@@ -1,4 +1,4 @@
-﻿function state = select_channels(state, args, meta)
+function state = select_channels(state, args, meta)
 %SELECT_CHANNELS Keep only specified channels in state.EEG.
 %
 % Purpose & behavior
@@ -69,7 +69,7 @@
     end
 
     if isempty(R.ChanIdx) && isempty(R.ChanLabels)
-        logPrint(R.LogFile, '[select_channels] No channels specified for selection. Returning original EEG.');
+        log_step(state, meta, R.LogFile, '[select_channels] No channels specified for selection. Returning original EEG.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end

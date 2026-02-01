@@ -1,77 +1,110 @@
 {
-  "Input": {
-    "filename": ""
-  },
-  "Output": {
-    "filepath": ""
-  },
-  "ChanInfo": {
-    "RefChanLabel": [],
-    "EOGChanLabel": ["VEOU", "VEOL", "HEOR", "HEOL"],
-    "KnownBadChanLabel": [],
-    "Chan2remove": [],
-    "ECGChanLabel": ["ECG"],
-    "OtherChanLabel": []
-  },
-  "Crop": {
-    "StartMarker": "1",
-    "EndMarker": "2",
-    "PadSec": 0.2
-  },
-  "Downsample": {
-    "Rate": 250
-  },
-  "Filter": {
-    "LowCutoff": 0.1,
-    "HighCutoff": 40
-  },
-  "Powerline": {
-    "Method": "cleanline",
-    "Freq": 50,
-    "BW": 2,
-    "NHarm": 3
-  },
-  "BadChan": {
-    "ExcludeLabel": ["VEOU", "VEOL", "HEOR", "HEOL", "ECG"],
-    "Action": "remove",
-    "KnownBadLabel": [],
-    "Kurtosis": false,
-    "Kurt_Threshold": 5,
-    "Probability": false,
-    "Prob_Threshold": 5,
-    "Spectrum": false,
-    "Spec_Threshold": 5,
-    "Spec_FreqRange": [0.1, 40],
-    "NormOn": "on",
-    "FASTER_MeanCorr": false,
-    "FASTER_Threshold": 0.4,
-    "FASTER_Variance": false,
-    "FASTER_VarThreshold": 3,
-    "FASTER_Hurst": false,
-    "FASTER_HurstThreshold": 3,
-    "CleanRaw_Flatline": true,
-    "Flatline_Sec": 5,
-    "CleanDrift_Band": [0.25, 0.75],
-    "CleanRaw_Noise": true,
-    "CleanChan_Corr": 0.8,
-    "CleanChan_Line": 4,
-    "CleanChan_MaxBad": 0.5,
-    "CleanChan_NSamp": 50
-  },
-  "Reref": {
-    "ExcludeLabel": []
-  },
-  "BadIC": {
-    "FilterICAOn": true,
-    "FilterICALocutoff": 1,
-    "ICAType": "runica",
-    "ICLabelOn": true,
-    "ICLabelThreshold": [[null, null], [0.7, 1], [0.7, 1], [0.7, 1], [0.7, 1], [0.7, 1], [null, null]],
-    "FASTEROn": true,
-    "EOGChanLabel": ["VEOU", "VEOL", "HEOR", "HEOL"],
-    "BrainIncludeTreshold": 0.7,
-    "DetectECG": false,
-    "ECG_Struct": null,
-    "ECGCorrelationThreshold": 0.65
+  "steps": [
+    {
+      "id": "S001",
+      "name": "Load",
+      "op": "load_set",
+      "args": {
+        "filename": "",
+        "filepath": "",
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S003",
+      "name": "Downsample",
+      "op": "downsample",
+      "args": {
+        "Rate": 250,
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S002",
+      "name": "Filter",
+      "op": "filter",
+      "args": {
+        "LowCutoff": 0.5,
+        "HighCutoff": 30,
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S004",
+      "name": "Crop",
+      "op": "crop_by_markers",
+      "args": {
+        "StartMarker": "98",
+        "EndMarker": "99",
+        "PadSec": 0.2,
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S005",
+      "name": "BadChannels",
+      "op": "remove_bad_channels",
+      "args": {
+        "ExcludeLabel": ["VEOU", "VEOL", "HEOR", "HEOL", "ECG"],
+        "Action": "remove",
+        "LogPath": "",
+        "LogFile": "",
+        "Kurtosis": true,
+        "Kurt_Threshold": 5,
+        "Probability": false,
+        "Prob_Threshold": 5,
+        "Spectrum": false,
+        "Spec_Threshold": 5,
+        "Spec_FreqRange": [1, 50],
+        "NormOn": "on",
+        "FASTER_MeanCorr": false,
+        "FASTER_Threshold": 0.4,
+        "FASTER_RefChan": [],
+        "FASTER_Bandpass": [],
+        "FASTER_Variance": false,
+        "FASTER_VarThreshold": 3,
+        "FASTER_Hurst": false,
+        "FASTER_HurstThreshold": 3,
+        "CleanRaw_Flatline": false,
+        "Flatline_Sec": 5,
+        "CleanDrift_Band": [0.25, 0.75],
+        "CleanRaw_Noise": false,
+        "CleanChan_Corr": 0.8,
+        "CleanChan_Line": 4,
+        "CleanChan_MaxBad": 0.5,
+        "CleanChan_NSamp": 50
+      }
+    },
+    {
+      "id": "S006",
+      "name": "RemoveChannels",
+      "op": "remove_channels",
+      "args": {
+        "Chan2remove": ["ECG"],
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S007",
+      "name": "Reref",
+      "op": "reref",
+      "args": {
+        "ExcludeLabel": [],
+        "LogFile": ""
+      }
+    },
+    {
+      "id": "S008",
+      "name": "Save",
+      "op": "save_set",
+      "args": {
+        "filename": "",
+        "filepath": "",
+        "LogFile": ""
+      }
+    }
+  ],
+  "Options": {
+    "validate_only": false
   }
 }

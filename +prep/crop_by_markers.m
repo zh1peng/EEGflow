@@ -1,4 +1,4 @@
-﻿function state = crop_by_markers(state, args, meta)
+function state = crop_by_markers(state, args, meta)
 %CROP_BY_MARKERS Crop state.EEG between start/end markers with optional padding.
 %
 % Purpose & behavior
@@ -130,19 +130,19 @@
         seg_start = max(1, start_samp - pad_samp);
         seg_end   = min(state.EEG.pnts, end_samp + pad_samp);
         out.mode  = 'start_end';
-        logPrint(LogFile, sprintf('[crop_by_markers] Cropping between "%s" and "%s" with %.2fs padding (samples: %d).', ...
+        log_step(state, meta, LogFile, sprintf('[crop_by_markers] Cropping between "%s" and "%s" with %.2fs padding (samples: %d).', ...
             StartMarker, EndMarker, PadTime, pad_samp));
     elseif hasStart && ~hasEnd
         seg_start = max(1, start_samp - pad_samp);
         seg_end   = state.EEG.pnts;
         out.mode  = 'start_only';
-        logPrint(LogFile, sprintf('[crop_by_markers] Start-only crop at "%s" with %.2fs padding before start. Keeping from sample %d to end.', ...
+        log_step(state, meta, LogFile, sprintf('[crop_by_markers] Start-only crop at "%s" with %.2fs padding before start. Keeping from sample %d to end.', ...
             StartMarker, PadTime, seg_start));
     else
         seg_start = 1;
         seg_end   = min(state.EEG.pnts, end_samp + pad_samp);
         out.mode  = 'end_only';
-        logPrint(LogFile, sprintf('[crop_by_markers] End-only crop at "%s" with %.2fs padding after end. Keeping from beginning to sample %d.', ...
+        log_step(state, meta, LogFile, sprintf('[crop_by_markers] End-only crop at "%s" with %.2fs padding after end. Keeping from beginning to sample %d.', ...
             EndMarker, PadTime, seg_end));
     end
 
@@ -155,7 +155,7 @@
 
     out.start_sample = seg_start;
     out.end_sample   = seg_end;
-    logPrint(LogFile, sprintf('[crop_by_markers] Cropped successfully: [%d, %d] (%.2fs).', ...
+    log_step(state, meta, LogFile, sprintf('[crop_by_markers] Cropped successfully: [%d, %d] (%.2fs).', ...
         seg_start, seg_end, (seg_end - seg_start + 1)/state.EEG.srate));
 
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

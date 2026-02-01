@@ -1,4 +1,4 @@
-﻿function state = remove_channels(state, args, meta)
+function state = remove_channels(state, args, meta)
 %REMOVE_CHANNELS Remove specified channels from state.EEG.
 %
 % Purpose & behavior
@@ -71,7 +71,7 @@
     end
 
     if isempty(R.ChanIdx) && isempty(R.Chan2remove)
-        logPrint(R.LogFile, '[remove_channels] No channels specified for removal. Skipping.');
+        log_step(state, meta, R.LogFile, '[remove_channels] No channels specified for removal. Skipping.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
@@ -79,7 +79,7 @@
     channels_to_remove_idx = [];
     if ~isempty(R.ChanIdx)
         channels_to_remove_idx = [channels_to_remove_idx, R.ChanIdx];
-        logPrint(R.LogFile, sprintf('[remove_channels] Channels to remove by index: %s', num2str(R.ChanIdx)));
+        log_step(state, meta, R.LogFile, sprintf('[remove_channels] Channels to remove by index: %s', num2str(R.ChanIdx)));
     end
     if ~isempty(R.Chan2remove)
         if ischar(R.Chan2remove) || isstring(R.Chan2remove)
@@ -88,9 +88,9 @@
         idx_from_labels = chans2idx(state.EEG, R.Chan2remove, 'MustExist', false);
         if ~isempty(idx_from_labels)
             channels_to_remove_idx = [channels_to_remove_idx, idx_from_labels];
-            logPrint(R.LogFile, sprintf('[remove_channels] Channels to remove by label: %s (indices: %s)', strjoin(R.Chan2remove, ', '), num2str(idx_from_labels)));
+            log_step(state, meta, R.LogFile, sprintf('[remove_channels] Channels to remove by label: %s (indices: %s)', strjoin(R.Chan2remove, ', '), num2str(idx_from_labels)));
         else
-            logPrint(R.LogFile, sprintf('[remove_channels] No channels found for labels: %s', strjoin(R.Chan2remove, ', ')));
+            log_step(state, meta, R.LogFile, sprintf('[remove_channels] No channels found for labels: %s', strjoin(R.Chan2remove, ', ')));
         end
     end
 
@@ -98,15 +98,15 @@
     channels_to_remove_idx(channels_to_remove_idx > state.EEG.nbchan | channels_to_remove_idx < 1) = [];
 
     if isempty(channels_to_remove_idx)
-        logPrint(R.LogFile, '[remove_channels] No valid channels to remove after processing inputs. Skipping.');
+        log_step(state, meta, R.LogFile, '[remove_channels] No valid channels to remove after processing inputs. Skipping.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
 
-    logPrint(R.LogFile, sprintf('[remove_channels] Removing %d channels: %s', length(channels_to_remove_idx), num2str(channels_to_remove_idx)));
+    log_step(state, meta, R.LogFile, sprintf('[remove_channels] Removing %d channels: %s', length(channels_to_remove_idx), num2str(channels_to_remove_idx)));
     state.EEG = pop_select(state.EEG, 'nochannel', channels_to_remove_idx);
     state.EEG = eeg_checkset(state.EEG);
-    logPrint(R.LogFile, '[remove_channels] Channel removal complete.');
+    log_step(state, meta, R.LogFile, '[remove_channels] Channel removal complete.');
 
     out = struct('removed_idx', channels_to_remove_idx);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);

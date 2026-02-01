@@ -1,4 +1,4 @@
-﻿function state = interpolate_bad_channels_epoch(state, args, meta)
+function state = interpolate_bad_channels_epoch(state, args, meta)
 %INTERPOLATE_BAD_CHANNELS_EPOCH Detect and interpolate bad channels per epoch.
 %
 % Purpose & behavior
@@ -67,15 +67,15 @@
     if ~isempty(R.ExcludeLabel)
         excludeIdx = chans2idx(state.EEG, R.ExcludeLabel);
         IdxDetect  = setdiff(1:state.EEG.nbchan, excludeIdx);
-        logPrint(R.LogFile, sprintf('Epoch-wise bad-channel detection: excluding labels=%s (idx=%s).', ...
+        log_step(state, meta, R.LogFile, sprintf('Epoch-wise bad-channel detection: excluding labels=%s (idx=%s).', ...
             labels2str(R.ExcludeLabel), mat2str(excludeIdx)));
     else
         excludeIdx = [];
         IdxDetect  = 1:state.EEG.nbchan;
-        logPrint(R.LogFile, 'Epoch-wise bad-channel detection: no excluded channels.');
+        log_step(state, meta, R.LogFile, 'Epoch-wise bad-channel detection: no excluded channels.');
     end
 
-    logPrint(R.LogFile, 'Identifying bad channels per epoch...');
+    log_step(state, meta, R.LogFile, 'Identifying bad channels per epoch...');
 
     bad_chan_cell = cell(1, state.EEG.trials);
     for epoch_i = 1:state.EEG.trials
@@ -84,14 +84,14 @@
         tmp_bad_abs = IdxDetect(tmp_bad_rel);
         bad_chan_cell{epoch_i} = tmp_bad_abs;
         if ~isempty(tmp_bad_abs)
-            logPrint(R.LogFile, sprintf('Epoch %d - Interpolated chans: %d, Details(idx)=%s', ...
+            log_step(state, meta, R.LogFile, sprintf('Epoch %d - Interpolated chans: %d, Details(idx)=%s', ...
                 epoch_i, numel(tmp_bad_abs), mat2str(tmp_bad_abs)));
         end
     end
 
-    logPrint(R.LogFile, 'Interpolating bad channels at the epoch level...');
+    log_step(state, meta, R.LogFile, 'Interpolating bad channels at the epoch level...');
     state.EEG = h_epoch_interp_spl(state.EEG, bad_chan_cell);
-    logPrint(R.LogFile, 'Bad channels interpolated successfully.');
+    log_step(state, meta, R.LogFile, 'Bad channels interpolated successfully.');
 
     out = struct();
     out.bad_chan_cell = bad_chan_cell;

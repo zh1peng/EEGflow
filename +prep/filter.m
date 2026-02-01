@@ -1,4 +1,4 @@
-﻿function state = filter(state, args, meta)
+function state = filter(state, args, meta)
 %FILTER Apply high-pass and/or low-pass FIR filters to state.EEG.
 %
 % Purpose & behavior
@@ -71,14 +71,14 @@
         return;
     end
 
-    logPrint(R.LogFile, '[filter] Starting filtering process.');
+    log_step(state, meta, R.LogFile, '[filter] Starting filtering process.');
 
     if R.LowCutoff > 0 && R.HighCutoff > 0 && R.LowCutoff >= R.HighCutoff
         error('[filter] High-pass frequency (%.2f Hz) must be lower than low-pass frequency (%.2f Hz).', ...
             R.LowCutoff, R.HighCutoff);
     end
     if R.LowCutoff < 0 && R.HighCutoff < 0
-        logPrint(R.LogFile, '[filter] No valid filter frequencies provided. Skipping filtering.');
+        log_step(state, meta, R.LogFile, '[filter] No valid filter frequencies provided. Skipping filtering.');
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
         return;
     end
@@ -92,7 +92,7 @@
         state.EEG = eeg_checkset(state.EEG);
     end
 
-    logPrint(R.LogFile, '[filter] Filtering complete.');
+    log_step(state, meta, R.LogFile, '[filter] Filtering complete.');
     out = struct('LowCutoff', R.LowCutoff, 'HighCutoff', R.HighCutoff);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

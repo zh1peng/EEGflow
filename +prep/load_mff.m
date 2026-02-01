@@ -1,4 +1,4 @@
-﻿function state = load_mff(state, args, meta)
+function state = load_mff(state, args, meta)
 %LOAD_MFF Load an EGI .mff dataset into the flow state.
 %
 % Purpose & behavior
@@ -29,7 +29,7 @@
 %       Parent folder containing the .mff.
 %   - LogFile
 %       Type: char; Default: ''
-%       If non-empty, logPrint writes progress to this file; otherwise to console.
+%       If non-empty, logs are appended to this file and also sent to the pipeline logger.
 % Outputs
 %   state (struct)
 %     - Updated flow state (see Flow/state contract above).
@@ -67,13 +67,13 @@
     end
 
     fullPath = fullfile(R.filepath, R.filename);
-    state_log(meta, sprintf('[load_mff] Loading MFF dataset: %s', fullPath));
+    state = log_step(state, meta, R.LogFile, sprintf('[load_mff] Loading MFF dataset: %s', fullPath));
 
     EEG = pop_mffimport({fullPath}, {'code'}, 0, 0);
     EEG = eeg_checkset(EEG);
     state.EEG = EEG;
     out = struct('loadedFile', fullPath);
 
-    state_log(meta, sprintf('[load_mff] Dataset loaded successfully: %s', fullPath));
+    state = log_step(state, meta, R.LogFile, sprintf('[load_mff] Dataset loaded successfully: %s', fullPath));
     state = state_update_history(state, op, R, 'success', out);
 end

@@ -1,7 +1,11 @@
-function state = init(dataset)
+function state = init_state(dataset)
     if ~isa(dataset, 'analysis.Dataset')
         error('Input must be an analysis.Dataset');
     end
+    if ~isfield(dataset.data, 'meta')
+        error('Dataset.data.meta is required.');
+    end
+
     state = struct();
     state.Dataset = dataset;
     state.Selection = struct( ...

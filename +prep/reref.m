@@ -1,4 +1,4 @@
-﻿function state = reref(state, args, meta)
+function state = reref(state, args, meta)
 %REREF Re-reference state.EEG to average reference.
 %
 % Purpose & behavior
@@ -78,20 +78,20 @@
     if ~isempty(excludeLabels)
         log_msg = [log_msg, sprintf(', excluding channels: %s', strjoin(excludeLabels, ', '))];
     end
-    logPrint(R.LogFile, [log_msg, '.']);
+    log_step(state, meta, R.LogFile, [log_msg, '.']);
 
     if isempty(excludeLabels)
-        logPrint(R.LogFile, '[reref] Applying average reference to all channels.');
+        log_step(state, meta, R.LogFile, '[reref] Applying average reference to all channels.');
         state.EEG = pop_reref(state.EEG, []);
     else
         labels = {state.EEG.chanlocs.labels};
         excludeIdx = find(ismember(labels, excludeLabels));
-        logPrint(R.LogFile, sprintf('[reref] Applying average reference, excluding %d channels.', length(excludeIdx)));
+        log_step(state, meta, R.LogFile, sprintf('[reref] Applying average reference, excluding %d channels.', length(excludeIdx)));
         state.EEG = pop_reref(state.EEG, [], 'exclude', excludeIdx);
     end
 
     state.EEG = eeg_checkset(state.EEG);
-    logPrint(R.LogFile, '[reref] Re-referencing complete.');
+    log_step(state, meta, R.LogFile, '[reref] Re-referencing complete.');
 
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

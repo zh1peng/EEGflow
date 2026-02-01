@@ -1,4 +1,4 @@
-﻿function state = segment_rest(state, args, meta)
+function state = segment_rest(state, args, meta)
 %SEGMENT_REST Segment resting-state EEG into overlapping epochs within EC/EO blocks.
 %
 % Purpose & behavior
@@ -94,7 +94,7 @@
     out = struct();
     EEG = state.EEG;
 
-    logPrint(R.LogFile, sprintf('[segment_rest] Label=%s | Start=%s | End=%s | BlockDurSec=%s', ...
+    log_step(state, meta, R.LogFile, sprintf('[segment_rest] Label=%s | Start=%s | End=%s | BlockDurSec=%s', ...
         string(R.BlockLabel), toStr(R.StartCode), toStr(R.EndCode), toStr(R.BlockDurSec)));
 
     epochLenSec = R.EpochLength / 1000;
@@ -111,7 +111,7 @@
     startLat = sort(startLat);
 
     if isempty(startLat)
-        logPrint(R.LogFile, '[segment_rest] No start events found. Exiting.');
+        log_step(state, meta, R.LogFile, '[segment_rest] No start events found. Exiting.');
         out.blocks_found = 0;
         out.epochs_created_total = 0;
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
@@ -130,12 +130,12 @@
         for i = 1:numel(startLat)
             s = startLat(i);
             if s < last_valid_end
-                logPrint(R.LogFile, sprintf('  > Skipping overlapping Start at %d (prev end %d)', s, last_valid_end));
+                log_step(state, meta, R.LogFile, sprintf('  > Skipping overlapping Start at %d (prev end %d)', s, last_valid_end));
                 continue;
             end
             e_candidates = endLat(endLat > s);
             if isempty(e_candidates)
-                logPrint(R.LogFile, sprintf('  > WARNING: Start at %d has no subsequent end; skipping.', s));
+                log_step(state, meta, R.LogFile, sprintf('  > WARNING: Start at %d has no subsequent end; skipping.', s));
                 continue;
             end
             e = e_candidates(1);
@@ -150,7 +150,7 @@
         for i = 1:numel(startLat)
             s = startLat(i);
             if s < last_valid_end
-                logPrint(R.LogFile, sprintf('  > Skipping overlapping Start at %d (prev end %d)', s, last_valid_end));
+                log_step(state, meta, R.LogFile, sprintf('  > Skipping overlapping Start at %d (prev end %d)', s, last_valid_end));
                 continue;
             end
             e = min(s + durPts - 1, EEG.pnts);
@@ -160,7 +160,7 @@
     end
 
     if isempty(blocks)
-        logPrint(R.LogFile, '[segment_rest] No valid blocks paired.');
+        log_step(state, meta, R.LogFile, '[segment_rest] No valid blocks paired.');
         out.blocks_found = 0;
         out.epochs_created_total = 0;
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
@@ -181,13 +181,13 @@
     out.blocks = blocks_trim;
 
     if out.blocks_found == 0
-        logPrint(R.LogFile, '[segment_rest] All blocks too short after trimming.');
+        log_step(state, meta, R.LogFile, '[segment_rest] All blocks too short after trimming.');
         out.epochs_created_total = 0;
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
 
-    logPrint(R.LogFile, sprintf('[segment_rest] %d blocks to segment (after trimming).', out.blocks_found));
+    log_step(state, meta, R.LogFile, sprintf('[segment_rest] %d blocks to segment (after trimming).', out.blocks_found));
 
     valid_EEG_blocks = {};
     epochs_per_block = zeros(out.blocks_found, 1);
@@ -195,13 +195,13 @@
     for b = 1:out.blocks_found
         sPt = blocks_trim(b, 1);
         ePt = blocks_trim(b, 2);
-        logPrint(R.LogFile, sprintf('[segment_rest] Block %d: points %d-%d (%.2f s)', ...
+        log_step(state, meta, R.LogFile, sprintf('[segment_rest] Block %d: points %d-%d (%.2f s)', ...
             b, sPt, ePt, (ePt - sPt + 1) / EEG.srate));
         try
             EEGb = pop_select(EEG, 'point', [sPt ePt]);
             EEGb = eeg_checkset(EEGb);
         catch ME
-            logPrint(R.LogFile, sprintf('  > ERROR selecting block %d: %s', b, ME.message));
+            log_step(state, meta, R.LogFile, sprintf('  > ERROR selecting block %d: %s', b, ME.message));
             continue;
         end
 
@@ -217,14 +217,14 @@
             'extractepochs', 'off');
 
         if ~isfield(EEGb, 'event') || isempty(EEGb.event)
-            logPrint(R.LogFile, sprintf('  > Block %d: no events after regepochs; skipping.', b));
+            log_step(state, meta, R.LogFile, sprintf('  > Block %d: no events after regepochs; skipping.', b));
             continue;
         end
 
         evtypes = string({EEGb.event.type});
         n_epoch_start = sum(evtypes == "epoch_start");
         if n_epoch_start == 0
-            logPrint(R.LogFile, sprintf('  > Block %d: no epoch_start events created; skipping.', b));
+            log_step(state, meta, R.LogFile, sprintf('  > Block %d: no epoch_start events created; skipping.', b));
             continue;
         end
 
@@ -232,7 +232,7 @@
         EEGb = eeg_checkset(EEGb);
 
         if EEGb.trials <= 0
-            logPrint(R.LogFile, sprintf('  > Block %d: 0 epochs after pop_epoch; skipping.', b));
+            log_step(state, meta, R.LogFile, sprintf('  > Block %d: 0 epochs after pop_epoch; skipping.', b));
             continue;
         end
 
@@ -249,7 +249,7 @@
     out.epochs_per_block = epochs_per_block;
 
     if isempty(valid_EEG_blocks)
-        logPrint(R.LogFile, '[segment_rest] No epochs generated across all blocks.');
+        log_step(state, meta, R.LogFile, '[segment_rest] No epochs generated across all blocks.');
         out.epochs_created_total = 0;
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
@@ -262,7 +262,7 @@
     EEG_out = eeg_checkset(EEG_out);
 
     out.epochs_created_total = EEG_out.trials;
-    logPrint(R.LogFile, sprintf('[segment_rest] Success. %d epochs created.', out.epochs_created_total));
+    log_step(state, meta, R.LogFile, sprintf('[segment_rest] Success. %d epochs created.', out.epochs_created_total));
 
     state.EEG = EEG_out;
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
