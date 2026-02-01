@@ -6,8 +6,7 @@
       "op": "load_set",
       "args": {
         "filename": "",
-        "filepath": "",
-        "LogFile": ""
+        "filepath": ""
       }
     },
     {
@@ -15,8 +14,7 @@
       "name": "Downsample",
       "op": "downsample",
       "args": {
-        "Rate": 250,
-        "LogFile": ""
+        "Rate": 250
       }
     },
     {
@@ -25,8 +23,7 @@
       "op": "filter",
       "args": {
         "LowCutoff": 0.5,
-        "HighCutoff": 30,
-        "LogFile": ""
+        "HighCutoff": 30
       }
     },
     {
@@ -36,8 +33,7 @@
       "args": {
         "StartMarker": "98",
         "EndMarker": "99",
-        "PadSec": 0.2,
-        "LogFile": ""
+        "PadSec": 0.2
       }
     },
     {
@@ -47,8 +43,6 @@
       "args": {
         "ExcludeLabel": ["VEOU", "VEOL", "HEOR", "HEOL", "ECG"],
         "Action": "remove",
-        "LogPath": "",
-        "LogFile": "",
         "Kurtosis": true,
         "Kurt_Threshold": 5,
         "Probability": false,
@@ -80,8 +74,7 @@
       "name": "RemoveChannels",
       "op": "remove_channels",
       "args": {
-        "Chan2remove": ["ECG"],
-        "LogFile": ""
+        "Chan2remove": ["ECG"]
       }
     },
     {
@@ -89,8 +82,7 @@
       "name": "Reref",
       "op": "reref",
       "args": {
-        "ExcludeLabel": [],
-        "LogFile": ""
+        "ExcludeLabel": []
       }
     },
     {
@@ -99,8 +91,7 @@
       "op": "save_set",
       "args": {
         "filename": "",
-        "filepath": "",
-        "LogFile": ""
+        "filepath": ""
       }
     }
   ],

@@ -12,7 +12,7 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
 %
 % Options:
 %   'State'            : Initial state struct (default: struct())
-%   'Registry'         : containers.Map registry (default: flow.Registry())
+%   'Registry'         : containers.Map registry (default: prep private registry)
 %   'ConfigureIO'      : Apply prep.setup_io to cfg (default: true)
 %   'ConfigureIOArgs'  : NV args passed to prep.setup_io (default: {})
 %   'WhenEvaluatorFn'  : @(exprString, state) for string "when" (default: [])
@@ -77,7 +77,7 @@ function [pipe, state, cfg] = build_pipeline(cfgIn, varargin)
 
     % --- state + registry ---
     if isempty(opt.Registry)
-        reg = flow.Registry();
+        reg = init_registry();
     else
         reg = opt.Registry;
     end

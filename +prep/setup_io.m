@@ -225,15 +225,11 @@ function cfgOut = setup_io(cfg, varargin)
             end
 
             if ismember(op, ops_need_logfile)
-                if ~isfield(args, 'LogFile') || isempty(args.LogFile)
-                    args.LogFile = cfgOut.LogFile;
-                end
+                args.LogFile = cfgOut.LogFile;
             end
 
             if ismember(op, ops_need_logpath)
-                if ~isfield(args, 'LogPath') || isempty(args.LogPath)
-                    args.LogPath = logPathDir;
-                end
+                args.LogPath = logPathDir;
             end
 
             % normalize common label fields to cellstr
