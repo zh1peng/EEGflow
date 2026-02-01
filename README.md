@@ -88,7 +88,7 @@ Notes:
   - args:
     - ExcludeLabel ({})
     - Action ('remove'|'flag', default 'remove')
-    - KnownBadLabel ([], numeric)
+    - KnownBadLabel ({})
     - Kurtosis (false), Kurt_Threshold (5)
     - Probability (false), Prob_Threshold (5)
     - Spectrum (false), Spec_Threshold (5), Spec_FreqRange ([1 50])

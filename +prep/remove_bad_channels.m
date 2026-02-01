@@ -36,7 +36,7 @@ function state = remove_bad_channels(state, args, meta)
 %       Type: char|string; Default: ''
 %       Log file path.
 %   - KnownBadLabel
-%       Type: numeric; Default: []
+%       Type: cellstr|char|string; Default: {}
 %       Channels known to be bad (included in final list).
 %   - Kurtosis
 %       Type: logical; Default: false
@@ -142,7 +142,7 @@ function state = remove_bad_channels(state, args, meta)
     p.addParameter('Action',            'remove', @(s) any(strcmpi(s,{'remove','flag'})));
     p.addParameter('LogPath',           '', @(s) ischar(s) || isstring(s));
     p.addParameter('LogFile',           '', @(s) ischar(s) || isstring(s));
-    p.addParameter('KnownBadLabel',       [], @(x) isempty(x) || isnumeric(x));
+    p.addParameter('KnownBadLabel',       {}, @(x) iscellstr(x) || ischar(x) || isstring(x));
 
     p.addParameter('Kurtosis',          false, @islogical);
     p.addParameter('Kurt_Threshold',    5, @(x)isnumeric(x)&&isscalar(x)&&x>0);
