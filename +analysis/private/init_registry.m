@@ -20,11 +20,21 @@ function reg = init_registry()
     reg('erp_extract_feature') = @analysis.erp_extract_feature;
 
     % TF
+    reg('tf_transform') = @analysis.tf_transform;
+    reg('tf_cache_save') = @analysis.tf_cache_save;
+    reg('tf_cache_load') = @analysis.tf_cache_load;
     reg('tf_compute') = @analysis.tf_compute;
     reg('tf_compute_ga') = @analysis.tf_compute_ga;
     reg('tf_define_band') = @analysis.tf_define_band;
     reg('tf_define_contrast') = @analysis.tf_define_contrast;
     reg('tf_band_stats') = @analysis.tf_band_stats;
     reg('tf_plot') = @analysis.tf_plot;
+    reg('tf_plot_contrast') = @analysis.tf_plot_contrast;
+    reg('tf_plot_topo') = @analysis.tf_plot_topo;
     reg('tf_extract_features') = @analysis.tf_extract_features;
+    reg('tf_contrast_maps') = @analysis.tf_contrast_maps;
+    reg('tf_contrast_maps_between') = @analysis.tf_contrast_maps_between;
+    reg('tf_stats_plane') = @analysis.tf_stats_plane;
+    reg('tf_feature_stats') = @analysis.tf_feature_stats;
+    reg('filter_complete_cases') = @analysis.filter_complete_cases;
 end

@@ -49,6 +49,13 @@ function state = segment_rest(state, args, meta)
 %   - LogFile
 %       Type: char|string; Default: ''
 %       Optional log file path.
+%   - PreserveICA
+%       Type: logical; Shape: scalar; Default: true
+%       If true, snapshots ICA fields from input EEG and restores them after
+%       block segmentation/merge.
+%   - RecomputeICAAct
+%       Type: logical; Shape: scalar; Default: false
+%       If true and ICA is restored, recomputes EEG.icaact on output.
 % Outputs
 %   state (struct)
 %     - Updated flow state (see Flow/state contract above).
@@ -80,11 +87,39 @@ function state = segment_rest(state, args, meta)
     p.addParameter('EpochLength',  2000, @(x) isnumeric(x) && isscalar(x) && x > 0);
     p.addParameter('EpochOverlap', 0.5,  @(x) isnumeric(x) && isscalar(x) && x >= 0 && x < 1);
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
+    p.addParameter('PreserveICA', true, @(x) islogical(x) && isscalar(x));
+    p.addParameter('RecomputeICAAct', false, @(x) islogical(x) && isscalar(x));
     nv = state_struct2nv(params);
 
     state_require_eeg(state, op);
-    p.parse(state.EEG, nv{:});
+    EEG = state.EEG;
+    p.parse(EEG, nv{:});
     R = p.Results;
+
+    % ----------------- Snapshot ICA from input (optional) -----------------
+    icaSnap = struct('has', false);
+    if R.PreserveICA
+        icaSnap.has = isfield(EEG, 'icaweights') && ~isempty(EEG.icaweights) && ...
+                      isfield(EEG, 'icasphere')  && ~isempty(EEG.icasphere)  && ...
+                      isfield(EEG, 'icachansind') && ~isempty(EEG.icachansind);
+
+        if icaSnap.has
+            icaSnap.icaweights  = EEG.icaweights;
+            icaSnap.icasphere   = EEG.icasphere;
+            icaSnap.icachansind = EEG.icachansind;
+
+            if isfield(EEG, 'icawinv') && ~isempty(EEG.icawinv)
+                icaSnap.icawinv = EEG.icawinv;
+            else
+                icaSnap.icawinv = [];
+            end
+
+            log_step(state, meta, R.LogFile, sprintf('[segment_rest] PreserveICA=ON (ncomp=%d, nch=%d)', ...
+                size(icaSnap.icaweights, 1), numel(icaSnap.icachansind)));
+        else
+            log_step(state, meta, R.LogFile, '[segment_rest] PreserveICA requested but no valid ICA fields found in input EEG.');
+        end
+    end
 
     if isfield(meta, 'validate_only') && meta.validate_only
         state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', struct());
@@ -92,7 +127,6 @@ function state = segment_rest(state, args, meta)
     end
 
     out = struct();
-    EEG = state.EEG;
 
     log_step(state, meta, R.LogFile, sprintf('[segment_rest] Label=%s | Start=%s | End=%s | BlockDurSec=%s', ...
         string(R.BlockLabel), toStr(R.StartCode), toStr(R.EndCode), toStr(R.BlockDurSec)));
@@ -261,6 +295,34 @@ function state = segment_rest(state, args, meta)
     end
     EEG_out = eeg_checkset(EEG_out);
 
+    % ----------------- Restore ICA + recompute activations -----------------
+    if icaSnap.has
+        if EEG_out.nbchan ~= EEG.nbchan
+            log_step(state, meta, R.LogFile, sprintf(['[segment_rest] WARNING: nbchan changed (in=%d out=%d). ' ...
+                'Not restoring ICA.'], EEG.nbchan, EEG_out.nbchan));
+        else
+            EEG_out.icaweights  = icaSnap.icaweights;
+            EEG_out.icasphere   = icaSnap.icasphere;
+            EEG_out.icachansind = icaSnap.icachansind;
+
+            if isempty(icaSnap.icawinv)
+                W = double(EEG_out.icaweights) * double(EEG_out.icasphere);
+                EEG_out.icawinv = pinv(W);
+            else
+                EEG_out.icawinv = icaSnap.icawinv;
+            end
+
+            if R.RecomputeICAAct
+                EEG_out.icaact = [];
+                EEG_out = recompute_icaact(EEG_out);
+                log_step(state, meta, R.LogFile, '[segment_rest] ICA restored + icaact recomputed on EEG_out.');
+            else
+                log_step(state, meta, R.LogFile, '[segment_rest] ICA restored on EEG_out (RecomputeICAAct=OFF).');
+            end
+            EEG_out = eeg_checkset(EEG_out);
+        end
+    end
+
     out.epochs_created_total = EEG_out.trials;
     log_step(state, meta, R.LogFile, sprintf('[segment_rest] Success. %d epochs created.', out.epochs_created_total));
 
@@ -296,6 +358,29 @@ for i = 1:numel(EEG.event)
         lat(end+1) = round(double(EEG.event(i).latency)); %#ok<AGROW>
     end
 end
+end
+
+function EEG = recompute_icaact(EEG)
+% Recompute EEG.icaact from current EEG.data using stored ICA unmixing.
+% Safe for epoched data (nbchan x pnts x trials).
+if ~isfield(EEG, 'icaweights') || isempty(EEG.icaweights) || ...
+   ~isfield(EEG, 'icasphere')  || isempty(EEG.icasphere)  || ...
+   ~isfield(EEG, 'icachansind')|| isempty(EEG.icachansind)
+    return;
+end
+
+if any(EEG.icachansind < 1) || any(EEG.icachansind > EEG.nbchan)
+    return;
+end
+
+W = double(EEG.icaweights) * double(EEG.icasphere);   % comps x chansUsed
+X = double(EEG.data(EEG.icachansind, :, :));          % chansUsed x pnts x trials
+
+[ch, pnts, tr] = size(X);
+X2 = reshape(X, ch, pnts * tr);
+
+A2 = W * X2;                                           % comps x (pnts*tr)
+EEG.icaact = reshape(A2, size(W, 1), pnts, tr);
 end
 
 function s = toStr(x)

@@ -1,7 +1,7 @@
 classdef TFanalysis
     % TFANALYSIS — Time-Frequency (T-F) analysis helper for Out_tfd datasets (cftt)
     %
-    % Works with analysis.run_tfr() outputs:
+    % Works with analysis.tf_transform() outputs:
     %   .sub_<ID>.<cond>.power           [chan x f x t]
     %   .sub_<ID>.<cond>.itc             [chan x f x t]
     %   .sub_<ID>.<cond>.power_trials    [chan x f x t x trials]  (optional)

@@ -1,7 +1,7 @@
-function Out_tfd = run_tfr(dataset, varargin)
-% RUN_TFR  Time–frequency decomposition wrapper for epoched EEG (canonical cftt)
+function Out_tfd = tf_transform(dataset, varargin)
+% TF_TRANSFORM  Time–frequency decomposition wrapper for epoched EEG (canonical cftt)
 % 
-%   Out_tfd = analysis.run_tfr(dataset, Name, Value, ...)
+%   Out_tfd = analysis.tf_transform(dataset, Name, Value, ...)
 % 
 % High-level TFR runner for an analysis.Dataset with epoched data. Supports
 % EEGLAB's NEWTIMEF, or a custom function handle. Handles optional cropping, 
@@ -90,23 +90,23 @@ function Out_tfd = run_tfr(dataset, varargin)
 % EXAMPLES
 % -------------------------------------------------------------------------
 % 1) Minimal run (eeglab defaults)
-%     Out_tfd = analysis.run_tfr(ds);
+%     Out_tfd = analysis.tf_transform(ds);
 % 
 % 2) EEGLAB method with parallelization and decibel baseline (−200 to 0 ms)
 %     % parpool('threads');    % optional but recommended to avoid cold start
 %     eeglab_params = {'freqs',[2 40], 'cycles',[3 0.8]};
-%     Out_tfd_eeg = analysis.run_tfr(ds, ...
+%     Out_tfd_eeg = analysis.tf_transform(ds, ...
 %         'method','eeglab', 'params',eeglab_params, ...
 %         'parallel',true, 'baseline_range',[-200 0], 'norm_type','decibel');
 % 
 % 3) Crop the epoch before TFR (keep only −500–1500 ms)
-%     Out_tfd_crop = analysis.run_tfr(ds, 'time_window',[-500 1500]);
+%     Out_tfd_crop = analysis.tf_transform(ds, 'time_window',[-500 1500]);
 % 
 % 4) Custom method handle (expects [chan x f x t x trials] output; cftt)
 %     % function [tf_complex, freqs, times] = my_cwt(EEG, params)
 %     %   % Build tf_complex (cftt), freqs (Hz), times (ms)
 %     % end
-%     Out_tfd_custom = analysis.run_tfr(ds, 'method',@my_cwt, 'params',struct('f',[2 80]));
+%     Out_tfd_custom = analysis.tf_transform(ds, 'method',@my_cwt, 'params',struct('f',[2 80]));
 % 
 % 5) Quick plotting of one subject/condition
 %     f = Out_tfd.meta.freqs;   % Hz
