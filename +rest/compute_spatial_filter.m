@@ -7,7 +7,7 @@ function source = compute_spatial_filter(data, params, freqBand)
         unit = char(string(params.Unit));
     end
 
-    headmodel = local_load_headmodel(params, unit);
+    headmodel = load_headmodel(params, unit);
 
     % --- Source model ---
     pos = [];
@@ -18,7 +18,7 @@ function source = compute_spatial_filter(data, params, freqBand)
             error('compute_spatial_filter:MissingAtlas', 'Provide params.SourcePos or params.AtlasPath.');
         end
         atlasT = readtable(params.AtlasPath);
-        pos = local_table_to_pos(atlasT);
+        pos = atlas_table_to_pos(atlasT);
     end
 
     cfg = [];
@@ -68,64 +68,4 @@ function source = compute_spatial_filter(data, params, freqBand)
     % cfg.lcmv.weightnorm = 'nai';
     cfg.sourcemodel = lf;
     source = ft_sourceanalysis(cfg, tlock);
-end
-
-function headmodel = local_load_headmodel(params, unit)
-    headmodel = [];
-    if isfield(params, 'HeadModel') && ~isempty(params.HeadModel)
-        headmodel = params.HeadModel;
-    elseif isfield(params, 'HeadModelPath') && ~isempty(params.HeadModelPath)
-        p = char(string(params.HeadModelPath));
-        if exist(p, 'file') ~= 2
-            error('compute_spatial_filter:HeadModelNotFound', 'HeadModelPath not found: %s', p);
-        end
-        S = load(p);
-        if isfield(S, 'vol')
-            headmodel = S.vol;
-        elseif isfield(S, 'headmodel')
-            headmodel = S.headmodel;
-        else
-            % last resort: single variable MAT
-            f = fieldnames(S);
-            if numel(f) == 1
-                headmodel = S.(f{1});
-            else
-                error('compute_spatial_filter:BadHeadModelFile', 'Could not find headmodel in %s', p);
-            end
-        end
-    else
-        error('compute_spatial_filter:MissingHeadModel', 'Provide params.HeadModel or params.HeadModelPath.');
-    end
-
-    if exist('ft_convert_units', 'file') && ~isempty(unit)
-        try
-            headmodel = ft_convert_units(headmodel, unit);
-        catch
-        end
-    end
-end
-
-function pos = local_table_to_pos(T)
-    % Common centroid CSV variants:
-    %   - columns named R,A,S (your legacy file)
-    %   - columns named X,Y,Z or x,y,z
-    vars = lower(string(T.Properties.VariableNames));
-
-    idxR = find(vars == "r", 1);
-    idxA = find(vars == "a", 1);
-    idxS = find(vars == "s", 1);
-    if ~isempty(idxR) && ~isempty(idxA) && ~isempty(idxS)
-        pos = [T{:, idxR}, T{:, idxA}, T{:, idxS}];
-        return;
-    end
-
-    idxX = find(vars == "x", 1);
-    idxY = find(vars == "y", 1);
-    idxZ = find(vars == "z", 1);
-    if ~isempty(idxX) && ~isempty(idxY) && ~isempty(idxZ)
-        pos = [T{:, idxX}, T{:, idxY}, T{:, idxZ}];
-        return;
-    end
-
-    error('compute_spatial_filter:BadAtlas', 'Atlas table must have columns (R,A,S) or (X,Y,Z).');
 end

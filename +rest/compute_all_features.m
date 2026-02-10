@@ -28,10 +28,16 @@ function state = compute_all_features(state, args, meta)
 %   - ComputeAec (logical)             default true
 %   - ComputeGraph (logical)           default true (skipped if GRETNA not available)
 %   - KeepSource (logical)             default false (source structs can be very large)
+%   - ComputeSourcePower (logical)     default true
+%       If true, store a per-ROI source power estimate (inside nodes) for
+%       each band. This enables source-space power visualizations without
+%       keeping the full FieldTrip "source" struct.
 %   - RemoveAperiodic (logical)        default false
 %       If true, compute sensor-space spectra and peak frequency both with
 %       and without aperiodic (1/f) component removal.
 %   - AperiodicFitRange (1x2 numeric)  default [2 40]
+%   - AtlasNetworkOrder (cellstr)      default Schaefer7 order
+%       Used for network-block parcellation in plotting utilities.
 %
 % Notes:
 %   - Requires FieldTrip for most computations.
@@ -87,6 +93,11 @@ function state = compute_all_features(state, args, meta)
     p.addParameter('ComputeAec', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('ComputeGraph', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('KeepSource', false, @(x) islogical(x) && isscalar(x));
+    p.addParameter('ComputeSourcePower', true, @(x) islogical(x) && isscalar(x));
+
+    % Parcellation (plotting convenience; computed even if you use SourcePos)
+    p.addParameter('AtlasNetworkOrder', {'Vis','SomMot','DorsAttn','SalVentAttn','Limbic','Cont','Default'}, ...
+        @(x) iscellstr(x) || isstring(x));
 
     % GRETNA params (only used if ComputeGraph=true and dependency available)
     p.addParameter('GRETNA_s1', 0.05, @(x) isnumeric(x) && isscalar(x));
@@ -191,6 +202,16 @@ function state = compute_all_features(state, args, meta)
     out.bands_ok = 0;
 
     if R.ComputeSource
+        atlas = [];
+        atlasPath = char(string(R.AtlasPath));
+        if ~isempty(atlasPath)
+            try
+                atlas = rest.atlas_load(atlasPath, 'NetworkOrder', R.AtlasNetworkOrder);
+            catch ME
+                log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING could not load atlas: %s', ME.message));
+            end
+        end
+
         for iB = 1:numel(bands)
             bandName = bands{iB};
             log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] Band=%s', bandName));
@@ -200,8 +221,36 @@ function state = compute_all_features(state, args, meta)
                 % Keep minimal source geometry even when KeepSource=false (for plotting/reporting).
                 if isfield(source, 'pos') && isfield(source, 'inside') && ~isempty(source.pos) && ~isempty(source.inside)
                     res.(bandName).source_pos = source.pos(source.inside, :);
+                    res.(bandName).source_inside_idx = find(source.inside);
                     if isfield(source, 'unit') && ~isempty(source.unit)
                         res.(bandName).source_unit = source.unit;
+                    end
+                end
+
+                % Store parcellation metadata (ROI/network labels) for plotting/reordering.
+                if isfield(res.(bandName), 'source_inside_idx') && ~isempty(res.(bandName).source_inside_idx)
+                    try
+                        parc = rest.atlas_make_parcellation(atlas, res.(bandName).source_inside_idx, ...
+                            'Pos', res.(bandName).source_pos, ...
+                            'NetworkOrder', R.AtlasNetworkOrder);
+                        res.(bandName).parcellation = parc;
+                    catch ME
+                        log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING parcellation failed (%s): %s', bandName, ME.message));
+                    end
+                end
+
+                % Store source power (inside nodes) for source-space visualization.
+                if R.ComputeSourcePower
+                    try
+                        pow = local_extract_source_pow(source);
+                        if isempty(pow)
+                            pow = rest.compute_source_power(data, source, R, bandName);
+                        end
+                        if ~isempty(pow)
+                            res.(bandName).source_pow = pow(:);
+                        end
+                    catch ME
+                        log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING source power failed (%s): %s', bandName, ME.message));
                     end
                 end
 
@@ -465,5 +514,31 @@ function data = local_align_elec(data, elec, unit)
     end
 
     data.elec = elec2;
+end
+
+function powInside = local_extract_source_pow(source)
+    powInside = [];
+    if ~isstruct(source) || ~isfield(source, 'inside') || isempty(source.inside)
+        return;
+    end
+    inside = logical(source.inside(:));
+    n = numel(inside);
+
+    powAll = [];
+    if isfield(source, 'pow') && isnumeric(source.pow)
+        powAll = source.pow;
+    elseif isfield(source, 'avg') && isstruct(source.avg) && isfield(source.avg, 'pow') && isnumeric(source.avg.pow)
+        powAll = source.avg.pow;
+    end
+
+    if isempty(powAll)
+        return;
+    end
+
+    % Accept [n x 1] or [1 x n].
+    if isvector(powAll) && numel(powAll) == n
+        powInside = double(powAll(:));
+        powInside = powInside(inside);
+    end
 end
     

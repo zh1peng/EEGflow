@@ -32,6 +32,10 @@ function params = params_template()
     params.HeadModelPath = '';   % e.g., 'standard_bem.mat' containing variable 'vol'
     params.HeadModel = [];       % alternatively pass the loaded structure
     params.AtlasPath = '';       % centroid CSV for source grid (see compute_spatial_filter)
+    params.SurfaceModelPath = ''; % optional (plotting): e.g., FieldTrip surface_white_both.mat
+
+    % Atlas network ordering (plotting/parcellation convenience)
+    params.AtlasNetworkOrder = {'Vis','SomMot','DorsAttn','SalVentAttn','Limbic','Cont','Default'};
 
     % Electrode positions for FieldTrip leadfield (optional but required for beamforming)
     params.TemplateElecFile = ''; % e.g., 'GSN-HydroCel-128.sfp'
