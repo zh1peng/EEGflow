@@ -67,14 +67,17 @@ function state = tf_plot_band_timecourse(state, args, meta)
     if args.visible, vis = 'on'; end
     fig = figure('Visible', vis);
     plot(times, band_tc, 'LineWidth', args.line_width);
+    ax = gca;
+    if isprop(ax, 'TickLabelInterpreter')
+        set(ax, 'TickLabelInterpreter', 'none');
+    end
     grid on;
-    xlabel('Time (ms)');
-    ylabel('Power (a.u.)');
-    title(sprintf('%s - %s (%s band, %s)', group, condition, band, title_str));
+    xlabel('Time (ms)', 'Interpreter', 'none');
+    ylabel('Power (a.u.)', 'Interpreter', 'none');
+    title(sprintf('%s - %s (%s band, %s)', group, condition, band, title_str), 'Interpreter', 'none');
 
     if ~isempty(args.out_file)
         saveas(fig, args.out_file);
         close(fig);
     end
 end
-

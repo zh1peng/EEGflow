@@ -176,7 +176,7 @@ function [EEG, com] =draw_selectcomps( EEG, compnum, fig);
                     [prob, classind] = max(EEG.etc.ic_classification.(classifier_name).classifications(ri, :));
                     t = title(sprintf('%s : %.1f%%', ...
                         EEG.etc.ic_classification.(classifier_name).classes{classind}, ...
-                        prob*100));
+                        prob*100), 'Interpreter', 'none');
                     set(t, 'Position', get(t, 'Position') .* [1 -1.2 1])
                 end
             end
@@ -186,7 +186,8 @@ function [EEG, com] =draw_selectcomps( EEG, compnum, fig);
         textColor = eval(fastif(EEG.reject.gcompreject(ri), 'COLREJ', 'COLACC'));
         % Create bold text on top of the rectangle
         text('Units', 'Normalized', 'Position', [0.5, -0.2], 'String', int2str(ri), ...
-             'HorizontalAlignment', 'center', 'Color', textColor, 'FontSize', 12, 'FontWeight', 'bold');
+             'HorizontalAlignment', 'center', 'Color', textColor, 'FontSize', 12, 'FontWeight', 'bold', ...
+             'Interpreter', 'none');
     
         drawnow;
         count = count + 1;

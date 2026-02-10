@@ -29,7 +29,7 @@ function state = tf_plot(state, args, meta)
             plot_data = squeeze(mean(data(ch_idx, :, :), 1));
 
             state_imagesc_tfr(times, freqs, plot_data, args);
-            title(sprintf('%s - %s\n%s', gn, cn, title_str));
+            title(sprintf('%s - %s\n%s', gn, cn, title_str), 'Interpreter', 'none');
         end
     end
 end

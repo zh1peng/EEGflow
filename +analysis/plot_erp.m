@@ -52,15 +52,18 @@ function state = plot_erp(state, args, meta)
             end
 
             plot_handles(end+1) = h; %#ok<AGROW>
-            legend_labels{end+1} = sprintf('%s (N=%d)', strrep(condition_name, '_', ' '), n); %#ok<AGROW>
+            legend_labels{end+1} = sprintf('%s (N=%d)', condition_name, n); %#ok<AGROW>
         end
         hold off;
         set(gca, 'YDir', 'reverse');
+        if isprop(gca, 'TickLabelInterpreter')
+            set(gca, 'TickLabelInterpreter', 'none');
+        end
         grid on; box on;
-        xlabel('Time (ms)');
-        ylabel('Amplitude (uV)');
-        title(strrep(sprintf('ERP for %s (Group: %s)', title_str, group_name), '_', ' '));
-        legend(plot_handles, legend_labels, 'Location', 'best');
+        xlabel('Time (ms)', 'Interpreter', 'none');
+        ylabel('Amplitude (uV)', 'Interpreter', 'none');
+        title(sprintf('ERP for %s (Group: %s)', title_str, group_name), 'Interpreter', 'none');
+        legend(plot_handles, legend_labels, 'Location', 'best', 'Interpreter', 'none');
         ax = gca;
         hline = line(ax.XLim, [0 0], 'Color', 'k', 'LineStyle', '--');
         set(get(get(hline, 'Annotation'), 'LegendInformation'), 'IconDisplayStyle', 'off');

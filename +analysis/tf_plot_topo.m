@@ -58,8 +58,11 @@ function state = tf_plot_topo(state, args, meta)
 
     figure('Name', ttl);
     topoplot(topo, state.Dataset.chanlocs);
-    title(ttl);
-    colorbar;
+    title(ttl, 'Interpreter', 'none');
+    cb = colorbar;
+    if isprop(cb, 'TickLabelInterpreter')
+        set(cb, 'TickLabelInterpreter', 'none');
+    end
 end
 
 function [freqs, times] = resolve_tf_axes(state, args)

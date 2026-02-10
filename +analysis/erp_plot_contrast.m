@@ -102,17 +102,17 @@ function state = erp_plot_contrast(state, args, meta)
     end
     grid(ax, 'on');
     box(ax, 'on');
-    xlabel(ax, 'Time (ms)');
-    ylabel(ax, 'Amplitude (uV)');
-    title(ax, strrep(sprintf('%s (%s)', args.contrast, plot_title), '_', ' '));
+    xlabel(ax, 'Time (ms)', 'Interpreter', 'none');
+    ylabel(ax, 'Amplitude (uV)', 'Interpreter', 'none');
+    title(ax, sprintf('%s (%s)', args.contrast, plot_title), 'Interpreter', 'none');
 
     legend_handles = [h_pos, h_neg];
-    legend_labels = {strrep(pos_cond, '_', ' '), strrep(neg_cond, '_', ' ')};
+    legend_labels = {pos_cond, neg_cond};
     if args.show_diff
         legend_handles(end+1) = h_diff; %#ok<AGROW>
-        legend_labels{end+1} = strrep(args.contrast, '_', ' '); %#ok<AGROW>
+        legend_labels{end+1} = args.contrast; %#ok<AGROW>
     end
-    legend(ax, legend_handles, legend_labels, 'Location', 'best');
+    legend(ax, legend_handles, legend_labels, 'Location', 'best', 'Interpreter', 'none');
     hline = line(ax, ax.XLim, [0 0], 'Color', 'k', 'LineStyle', '--');
     set(get(get(hline,'Annotation'),'LegendInformation'), 'IconDisplayStyle', 'off');
 end

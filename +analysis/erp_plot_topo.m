@@ -48,9 +48,12 @@ function state = erp_plot_topo(state, args, meta)
             else
                 bar(topo_vals);
                 set(gca,'XTick',1:numel(topo_vals),'XTickLabel',{state.Dataset.chanlocs.labels},'XTickLabelRotation',45);
-                ylabel('Mean amplitude (uV)');
+                if isprop(gca, 'TickLabelInterpreter')
+                    set(gca, 'TickLabelInterpreter', 'none');
+                end
+                ylabel('Mean amplitude (uV)', 'Interpreter', 'none');
             end
-            title(sprintf('%s | %s', strrep(group_name,'_',' '), strrep(condition_name,'_',' ')));
+            title(sprintf('%s | %s', group_name, condition_name), 'Interpreter', 'none');
         end
     end
 
@@ -59,6 +62,9 @@ function state = erp_plot_topo(state, args, meta)
         for ax = findall(gcf, 'Type', 'axes')'
             caxis(ax, clim);
         end
-        colorbar('Position', [0.92 0.1 0.02 0.8]);
+        cb = colorbar('Position', [0.92 0.1 0.02 0.8]);
+        if isprop(cb, 'TickLabelInterpreter')
+            set(cb, 'TickLabelInterpreter', 'none');
+        end
     end
 end

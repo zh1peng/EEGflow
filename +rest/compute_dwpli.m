@@ -1,0 +1,45 @@
+function [connMatrix]=compute_dwpli(data, source,params, freqBand)
+    % Load EEG data and check that there are more than 10 epochs
+    assert(size(data.trial,2)>=10, 'Recording with less than 10 epochs');
+    
+    % Band-pass filter the data in the relevant frequency band
+    cfg = [];
+    cfg.bpfilter = 'yes';
+    cfg.bpfreq = params.FreqBand.(freqBand);
+    data = ft_preprocessing(cfg, data);
+    
+   
+    % Reconstruct the virtual time series (apply spatial filter to sensor level
+    % data)
+    cfg  = [];
+    cfg.pos = source.pos(source.inside,:);
+    virtChan_data = ft_virtualchannel(cfg,data,source);
+    clear data source;
+    
+    % Frequencies of interest
+    fois = params.FreqBand.(freqBand)(1):params.FreqResConnectivity:params.FreqBand.(freqBand)(2);
+    % Fourier components
+    cfg = [];
+    cfg.method = 'mtmfft';
+    cfg.taper = 'dpss';
+    cfg.output = 'fourier';
+    cfg.keeptrials = 'yes';
+    cfg.pad = 'nextpow2';
+    cfg.foi = fois;
+    cfg.tapsmofrq = 1;
+    virtFreq = ft_freqanalysis(cfg, virtChan_data);
+    clear virtChan_data;
+    
+    % Connectivity
+    cfg = [];
+    cfg.method = 'wpli_debiased';
+    source_conn = ft_connectivityanalysis(cfg, virtFreq);
+    clear virtFreq;
+    
+    % Average across frequency bins
+    connMatrix = mean(abs(source_conn.wpli_debiasedspctrm),3);
+    if all(all(isnan(connMatrix)))
+        error('Connectivity matrix only contains NaN');
+    end
+
+end

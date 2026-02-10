@@ -2,9 +2,16 @@ function state_imagesc_tfr(times, freqs, data, opts)
 %STATE_IMAGESC_TFR Plot a TFR heatmap with optional ranges/mask.
     imagesc(times, freqs, data);
     axis xy;
-    xlabel('Time (ms)');
-    ylabel('Frequency (Hz)');
-    colorbar;
+    xlabel('Time (ms)', 'Interpreter', 'none');
+    ylabel('Frequency (Hz)', 'Interpreter', 'none');
+    ax = gca;
+    if isprop(ax, 'TickLabelInterpreter')
+        set(ax, 'TickLabelInterpreter', 'none');
+    end
+    cb = colorbar;
+    if isprop(cb, 'TickLabelInterpreter')
+        set(cb, 'TickLabelInterpreter', 'none');
+    end
     if isfield(opts, 'x_range') && ~isempty(opts.x_range), xlim(opts.x_range); end
     if isfield(opts, 'freq_range') && ~isempty(opts.freq_range), ylim(opts.freq_range); end
     if isfield(opts, 'color_range') && ~isempty(opts.color_range), caxis(opts.color_range); end

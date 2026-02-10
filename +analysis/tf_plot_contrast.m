@@ -46,7 +46,7 @@ function state = tf_plot_contrast(state, args, meta)
 
     figure('Name', ['TF Contrast ' cname]);
     state_imagesc_tfr(times, freqs, plot_data, args);
-    title(sprintf('Contrast: %s (%s)', cname, title_str));
+    title(sprintf('Contrast: %s (%s)', cname, title_str), 'Interpreter', 'none');
 end
 
 function [freqs, times] = resolve_tf_axes(state, C)
