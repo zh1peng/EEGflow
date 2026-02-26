@@ -13,6 +13,7 @@ function fig = plot_connectivity(res, connMeasure, varargin)
 %   'Visible'          : 'on'|'off' (default 'off')
 %   'Title'            : char/string (default connMeasure)
 %   'ShowNetworkLabels': logical (default true)
+%   'ColorScale'       : 'shared'|'perband' (default 'shared')
 %
 % Notes:
 % - If res.(band).parcellation exists, it is used to reorder nodes by
@@ -26,6 +27,7 @@ function fig = plot_connectivity(res, connMeasure, varargin)
     ip.addParameter('Visible', 'off', @(s) ischar(s) || isstring(s));
     ip.addParameter('Title', '', @(s) ischar(s) || isstring(s));
     ip.addParameter('ShowNetworkLabels', true, @(x) islogical(x) && isscalar(x));
+    ip.addParameter('ColorScale', 'shared', @(s) ischar(s) || isstring(s));
     ip.parse(res, connMeasure, varargin{:});
     R = ip.Results;
 
@@ -64,6 +66,23 @@ function fig = plot_connectivity(res, connMeasure, varargin)
 
     % Put network labels on the last tile to reduce clutter.
     labelTile = nBand;
+    scaleMode = lower(char(string(R.ColorScale)));
+    if ~ismember(scaleMode, {'shared','perband'})
+        error('rest:plot_connectivity:BadColorScale', 'ColorScale must be shared|perband.');
+    end
+
+    cLimShared = [0 1];
+    if strcmp(scaleMode, 'shared')
+        allV = [];
+        for iB = 1:nBand
+            b = bandNames{iB};
+            C0 = double(res.(b).(fieldName));
+            if size(C0, 1) ~= size(C0, 2), continue; end
+            v = C0(tril(true(size(C0, 1)), -1));
+            allV = [allV; v(:)]; %#ok<AGROW>
+        end
+        cLimShared = local_range(allV);
+    end
 
     for iB = 1:nBand
         band = bandNames{iB};
@@ -97,12 +116,17 @@ function fig = plot_connectivity(res, connMeasure, varargin)
         axis(ax, 'image');
         set(ax, 'YDir', 'normal');
         colormap(ax, parula);
-        colorbar(ax);
 
         % Show only lower triangle (exclude diagonal).
         alpha = zeros(n, n);
         alpha(tril(true(n), -1)) = 1;
         im.AlphaData = alpha;
+
+        if strcmp(scaleMode, 'shared')
+            caxis(ax, cLimShared);
+        else
+            caxis(ax, local_range(Cr(tril(true(n), -1))));
+        end
 
         % Network block boundaries (white lines).
         if ~isempty(boundary) && numel(boundary) >= 3
@@ -115,14 +139,35 @@ function fig = plot_connectivity(res, connMeasure, varargin)
             hold(ax, 'off');
         end
 
+        % Keep x-axis hidden to avoid clutter on subject-level reports.
         if R.ShowNetworkLabels && iB == labelTile && ~isempty(labelPos) && ~isempty(netNames)
-            set(ax, 'XTick', labelPos, 'XTickLabel', netNames, 'XTickLabelRotation', 45, ...
+            set(ax, 'XTick', [], 'XTickLabel', [], ...
                 'YTick', labelPos, 'YTickLabel', netNames, 'TickLength', [0 0], 'Box', 'off');
         else
             set(ax, 'XTick', [], 'YTick', [], 'TickLength', [0 0], 'Box', 'off');
+        end
+
+        if strcmp(scaleMode, 'shared')
+            if iB == nBand
+                colorbar(ax, 'eastoutside');
+            end
+        else
+            colorbar(ax, 'eastoutside');
         end
 
         title(ax, band, 'Interpreter', 'none');
     end
 end
 
+function c = local_range(v)
+    v = double(v(:));
+    v = v(isfinite(v));
+    if isempty(v)
+        c = [0 1];
+        return;
+    end
+    c = [min(v) max(v)];
+    if c(2) <= c(1)
+        c = c(1) + [-1 1] * max(abs(c(1)), 1);
+    end
+end

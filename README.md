@@ -6,6 +6,14 @@ Prep and analysis are decoupled so you can compose workflows from small, testabl
 This README focuses on preprocessing. It is written to be friendly to humans and LLMs.
 
 ----------------------------------------------------------------------
+## Documentation
+
+- Preprocessing (`+prep`): `docs/prep.md`
+- Resting-state features (`+rest`): `docs/rest.md`
+- ERP analysis (`+analysis`): `docs/erp.md`
+- Time-frequency analysis (`+analysis`): `docs/tf.md`
+
+----------------------------------------------------------------------
 ## Prep design logic (quick mental model)
 
 - State is the payload: every step is `state = prep.<op>(state, args, meta)`.

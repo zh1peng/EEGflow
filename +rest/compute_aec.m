@@ -1,65 +1,38 @@
-function [connMatrix]=compute_aec(data, source, params,  freqBand)
+function connMatrix = compute_aec(data, source, params, freqBand)
+%COMPUTE_AEC Compute source-space amplitude envelope correlation (AEC).
+%
+% This computes orthogonalized AEC (Hipp et al., 2012, Nat Neurosci) on
+% virtual channels reconstructed from a beamformer spatial filter:
+%   1) band-pass filter sensor-space data in the requested band
+%   2) reconstruct ROI time series using FieldTrip ft_virtualchannel
+%   3) compute orthogonalized AEC per epoch via rest.aecConnectivity
+%   4) average across epochs
+%
+% Inputs
+%   data     : FieldTrip epoched sensor data (struct)
+%   source   : FieldTrip source struct returned by rest.compute_spatial_filter
+%   params   : params struct with fields .FreqBand.(freqBand)
+%   freqBand : char/string, e.g. 'alpha'
+%
+% Output
+%   connMatrix : [nROI x nROI] averaged AEC connectivity matrix.
+%
+% Attribution / origin
+%   The underlying AEC implementation is adapted from DISCOVER-EEG custom
+%   functions (CC BY 4.0). See rest.aecConnectivity for details.
+
     % Band-pass filter the data in the relevant frequency band
     cfg = [];
     cfg.bpfilter = 'yes';
     cfg.bpfreq = params.FreqBand.(freqBand);
     data = ft_preprocessing(cfg, data);
-    % Reconstruct the virtual time series (apply spatial filter to sensor level
-    % data)
-    cfg  = [];
-    cfg.pos = source.pos(source.inside,:);
-    virtChan_data = ft_virtualchannel(cfg,data,source);
 
-    if exist('aecConnectivity', 'file')
-        connMatrix = aecConnectivity(virtChan_data);
-        connMatrix = mean(connMatrix, 3);
-        return;
-    end
+    % Reconstruct the virtual time series (apply spatial filter to sensor-level data)
+    cfg = [];
+    cfg.pos = source.pos(source.inside, :);
+    virtChan_data = ft_virtualchannel(cfg, data, source);
 
-    % Fallback: simple amplitude envelope correlation (AEC) averaged across trials.
-    connMatrix = local_aec_fallback(virtChan_data);
- 
-    end
-
-function C = local_aec_fallback(data)
-    % data: FieldTrip epoched data struct with .trial {1 x nTrials}, each [nChan x nTime]
-    nTr = numel(data.trial);
-    if nTr < 1
-        error('compute_aec:BadData', 'No trials found.');
-    end
-
-    X1 = data.trial{1};
-    nCh = size(X1, 1);
-    Csum = zeros(nCh, nCh);
-
-    for t = 1:nTr
-        X = double(data.trial{t});
-        if size(X, 1) ~= nCh
-            error('compute_aec:BadData', 'Inconsistent channel count across trials.');
-        end
-        env = abs(local_analytic_signal(X)); % [ch x time]
-        Ct = corrcoef(env.');                % [ch x ch]
-        Csum = Csum + Ct;
-    end
-
-    C = Csum / nTr;
-end
-
-function z = local_analytic_signal(x)
-    % Compute analytic signal along 2nd dimension without toolbox dependencies.
-    % x: [nChan x nTime] real
-    n = size(x, 2);
-    X = fft(x, [], 2);
-
-    h = zeros(1, n);
-    if mod(n, 2) == 0
-        h(1) = 1;
-        h(n/2 + 1) = 1;
-        h(2:n/2) = 2;
-    else
-        h(1) = 1;
-        h(2:(n + 1)/2) = 2;
-    end
-
-    z = ifft(X .* h, [], 2);
+    % Compute orthogonalized AEC per epoch, then average across epochs.
+    Cepoch = rest.aecConnectivity(virtChan_data, 'Verbose', false);
+    connMatrix = mean(Cepoch, 3, 'omitnan');
 end

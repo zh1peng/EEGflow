@@ -31,7 +31,9 @@ function atlas = atlas_load(atlasPath, varargin)
         error('rest:atlas_load:NotFound', 'Atlas file not found: %s', p);
     end
 
-    T = readtable(p);
+    % Preserve column headers to avoid noisy "VariableNames modified" warnings.
+    % We normalize names ourselves below for robust matching.
+    T = readtable(p, 'VariableNamingRule', 'preserve');
     pos = atlas_table_to_pos(T);
 
     atlas = struct();
@@ -40,6 +42,9 @@ function atlas = atlas_load(atlasPath, varargin)
 
     % Optional metadata columns (handle common naming variants).
     vars = lower(string(T.Properties.VariableNames));
+    % Normalize headers like "ROI Label" -> "roi_label" for matching.
+    vars = regexprep(vars, '[^a-z0-9]+', '_');
+    vars = regexprep(vars, '^_+|_+$', '');
 
     atlas.roi_label = [];
     idxLabel = find(vars == "roilabel" | vars == "roi_label" | vars == "label", 1);
@@ -84,4 +89,3 @@ function atlas = atlas_load(atlasPath, varargin)
     atlas.hemi = hemi;
     atlas.network = net;
 end
-

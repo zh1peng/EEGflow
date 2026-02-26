@@ -52,8 +52,9 @@ function state = compute_all_features(state, args, meta)
     params = state_merge(cfg, args);
 
     % -------- defaults --------
-    defaultBands = rest.params_template();
-    defaultBands = defaultBands.FreqBand;
+    % EEGflow expects analysis parameters to be provided via config JSON
+    % (state.cfg + step args). Avoid relying on a code-side "params template".
+    defaultBands = struct();
 
     p = inputParser;
     p.addRequired('EEG', @isstruct);
@@ -84,6 +85,7 @@ function state = compute_all_features(state, args, meta)
     p.addParameter('HeadModel', [], @(x) isempty(x) || isstruct(x));
     p.addParameter('AtlasPath', '', @(s) ischar(s) || isstring(s));
     p.addParameter('SourcePos', [], @(x) isempty(x) || (isnumeric(x) && size(x, 2) == 3));
+    p.addParameter('SurfaceModelPath', '', @(s) ischar(s) || isstring(s));
     p.addParameter('TemplateElecFile', '', @(s) ischar(s) || isstring(s));
     p.addParameter('Elec', [], @(x) isempty(x) || isstruct(x));
     p.addParameter('Unit', 'mm', @(s) ischar(s) || isstring(s));
@@ -115,6 +117,11 @@ function state = compute_all_features(state, args, meta)
     state_require_eeg(state, op);
     p.parse(state.EEG, nv{:});
     R = p.Results;
+
+    if ~isfield(R, 'FreqBand') || ~isstruct(R.FreqBand) || isempty(fieldnames(R.FreqBand))
+        error('rest:compute_all_features:MissingFreqBand', ...
+            'FreqBand is required. Provide it in your rest config JSON (step args) as a struct, e.g., {\"alpha\":[8,12]}.');
+    end
 
     if isfield(meta, 'validate_only') && meta.validate_only
         deps = struct();
@@ -230,7 +237,14 @@ function state = compute_all_features(state, args, meta)
                 % Store parcellation metadata (ROI/network labels) for plotting/reordering.
                 if isfield(res.(bandName), 'source_inside_idx') && ~isempty(res.(bandName).source_inside_idx)
                     try
-                        parc = rest.atlas_make_parcellation(atlas, res.(bandName).source_inside_idx, ...
+                        idxInAtlas = res.(bandName).source_inside_idx;
+                        if ~isempty(atlas) && isstruct(atlas) && isfield(atlas, 'pos') && ~isempty(atlas.pos)
+                            idxMapped = local_map_sourcepos_to_atlas(R, res.(bandName), atlas);
+                            if ~isempty(idxMapped)
+                                idxInAtlas = idxMapped;
+                            end
+                        end
+                        parc = rest.atlas_make_parcellation(atlas, idxInAtlas, ...
                             'Pos', res.(bandName).source_pos, ...
                             'NetworkOrder', R.AtlasNetworkOrder);
                         res.(bandName).parcellation = parc;
@@ -539,6 +553,58 @@ function powInside = local_extract_source_pow(source)
     if isvector(powAll) && numel(powAll) == n
         powInside = double(powAll(:));
         powInside = powInside(inside);
+    end
+end
+
+function idxInsideAtlas = local_map_sourcepos_to_atlas(R, bandRes, atlas)
+    idxInsideAtlas = [];
+    if ~isstruct(bandRes) || ~isfield(bandRes, 'source_inside_idx') || isempty(bandRes.source_inside_idx)
+        return;
+    end
+    if ~isstruct(atlas) || ~isfield(atlas, 'pos') || isempty(atlas.pos)
+        return;
+    end
+
+    idxInside = bandRes.source_inside_idx(:);
+    atlasPos = double(atlas.pos);
+
+    % Preferred path: map provided SourcePos (all nodes) to atlas rows, then
+    % apply inside indices. This preserves non-contiguous atlas subset order.
+    if isfield(R, 'SourcePos') && ~isempty(R.SourcePos)
+        srcPosAll = double(R.SourcePos);
+        idxAll = local_nearest_row_map(srcPosAll, atlasPos);
+        if numel(idxAll) >= max(idxInside) && all(isfinite(idxAll(idxInside)))
+            idxInsideAtlas = idxAll(idxInside);
+            return;
+        end
+    end
+
+    % Fallback: map inside positions directly.
+    if isfield(bandRes, 'source_pos') && ~isempty(bandRes.source_pos)
+        idxDirect = local_nearest_row_map(double(bandRes.source_pos), atlasPos);
+        if all(isfinite(idxDirect))
+            idxInsideAtlas = idxDirect;
+            return;
+        end
+    end
+end
+
+function idxMap = local_nearest_row_map(pos, atlasPos)
+    n = size(pos, 1);
+    idxMap = nan(n, 1);
+    if n == 0 || isempty(atlasPos)
+        return;
+    end
+
+    % Coordinates are expected in mm; use a small tolerance for numeric drift.
+    tolMm = 1e-3;
+    tol2 = tolMm * tolMm;
+    for i = 1:n
+        d2 = sum((atlasPos - pos(i, :)).^2, 2);
+        [dMin, k] = min(d2);
+        if ~isempty(k) && isfinite(dMin) && dMin <= tol2
+            idxMap(i) = k;
+        end
     end
 end
     

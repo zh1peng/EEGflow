@@ -1,0 +1,75 @@
+{
+  "steps": [
+    {
+      "id": "S001",
+      "name": "Load",
+      "op": "load_set",
+      "args": {
+        "filename": "",
+        "filepath": ""
+      }
+    },
+    {
+      "id": "S010",
+      "name": "SegmentRest",
+      "op": "segment_rest",
+      "args": {
+        "BlockLabel": "EC",
+        "EpochLength": 2000,
+        "EpochOverlap": 0.5
+      }
+    },
+    {
+      "id": "S020",
+      "name": "RestFeatures",
+      "op": "compute_all_features",
+      "args": {
+        "LogFile": "",
+        "OutputPath": "",
+        "OutputBaseName": "",
+        "SaveMat": true,
+        "KeepInState": true,
+        "nTrial_treshold": 10,
+        "FreqRes": 0.1,
+        "Pad": null,
+        "Taper": "dpss",
+        "Tapsmofrq": 1,
+        "FreqBand": {
+          "delta": [1, 4],
+          "theta": [4, 8],
+          "alpha": [8, 12],
+          "beta": [13, 30],
+          "gamma": [30, 45]
+        },
+        "RemoveAperiodic": false,
+        "AperiodicFitRange": [2, 40],
+        "ComputeSource": true,
+        "HeadModelPath": "",
+        "AtlasPath": "",
+        "SourcePos": [],
+        "TemplateElecFile": "",
+        "Elec": null,
+        "Unit": "mm",
+        "SurfaceModelPath": "resources/surface/surface_white_both.mat",
+        "ComputeDwpli": true,
+        "ComputeAec": true,
+        "FreqResConnectivity": 0.5,
+        "ComputeGraph": true,
+        "KeepSource": false,
+        "ComputeSourcePower": true,
+        "AtlasNetworkOrder": ["Vis", "SomMot", "DorsAttn", "SalVentAttn", "Limbic", "Cont", "Default"],
+        "GRETNA_s1": 0.05,
+        "GRETNA_s2": 0.3,
+        "GRETNA_deltas": 0.02,
+        "GRETNA_n": 1000,
+        "AutoAddDeps": true,
+        "FieldTripRoot": "",
+        "GretnaRoot": ""
+      }
+    }
+  ],
+  "Options": {
+    "validate_only": false
+  }
+}
+
