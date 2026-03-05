@@ -54,6 +54,7 @@ function Out = extract_epoch(varargin)
 %   'aliases' (2-column cell, default: [])
 %       A mapping to rename markers to more readable condition names.
 %       Example: {'S 10', 'target'; 'S 20', 'nontarget'}.
+%       Multiple markers can map to the same condition name; trials are merged.
 %
 %   'epoch_window' (1x2 double, default: [-1000 2000])
 %       The time window in milliseconds [start, end] relative to the event marker.
@@ -294,8 +295,19 @@ for i = 1:numel(setFiles)
             data = EEGep.data;                                    % chan × time × trial
             if opt.to_single, data = single(data); end
 
-            % ---- FLAT storage: only data
-            Out.(subKey).(condKey) = data;
+            % ---- FLAT storage: only data (merge markers that alias to the same condition)
+            if isfield(Out.(subKey), condKey) && ~isempty(Out.(subKey).(condKey))
+                prevData = Out.(subKey).(condKey);
+                if size(prevData,1) ~= size(data,1) || size(prevData,2) ~= size(data,2)
+                    error(['Cannot merge marker "%s" into condition "%s": ' ...
+                        'size mismatch [%d x %d x %d] vs [%d x %d x %d].'], ...
+                        mk, condName, size(prevData,1), size(prevData,2), size(prevData,3), ...
+                        size(data,1), size(data,2), size(data,3));
+                end
+                Out.(subKey).(condKey) = cat(3, prevData, data);
+            else
+                Out.(subKey).(condKey) = data;
+            end
 
 
             % ---- add to summary
@@ -306,7 +318,9 @@ for i = 1:numel(setFiles)
 
         catch ME
             warns{end+1} = sprintf('[WARN] %s / %s: %s', subKey, condName, ME.message);
-            Out.(subKey).(condKey) = [];
+            if ~isfield(Out.(subKey), condKey)
+                Out.(subKey).(condKey) = [];
+            end
             % add zero-row to summary
             summary_sub{end+1,1}  = subKey;
             summary_cond{end+1,1} = condKey;
@@ -322,8 +336,13 @@ end
 T = table(summary_sub, summary_cond, summary_n, summary_file, ...
     'VariableNames', {'sub','condition','n','file'});
 
+% Aggregate trial counts first (handles multiple markers aliased to one condition)
+[g, gSub, gCond] = findgroups(T.sub, T.condition);
+gN = splitapply(@sum, T.n, g);
+Tagg = table(gSub, gCond, gN, 'VariableNames', {'sub','condition','n'});
+
 % Pivot trial counts to wide by condition
-Tw = unstack(T(:, {'sub','condition','n'}), 'n', 'condition', 'GroupingVariables', 'sub');
+Tw = unstack(Tagg, 'n', 'condition', 'GroupingVariables', 'sub');
 
 % Ensure all expected condition columns exist (even if some subjects lack them)
 allConds = conds(:)';  % from earlier

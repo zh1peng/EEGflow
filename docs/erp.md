@@ -276,6 +276,7 @@ state = analysis.init_state(ds);
 
 Many datasets use numeric event codes (e.g., `10`, `20`, `30`) but you want readable condition names.
 Use `aliases` in `analysis.extract_epoch` to map markers to canonical condition names.
+You can map multiple markers to one condition (e.g., `10 -> salience_cue`, `20 -> salience_cue`); extracted trials are concatenated into that condition.
 
 ### 5.2 ROI definitions
 
