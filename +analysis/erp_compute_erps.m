@@ -10,7 +10,7 @@ function state = erp_compute_erps(state, args, ~)
     if isempty(state.Selection.Conditions), error('No conditions selected.'); end
 
     state.Results.ERPs = struct();
-    fprintf('Computing ERPs (%s)...\n', args.method);
+    fprintf('Computing ERPs (%s)... [EEGflow v%s]\n', args.method, analysis.get_version());
 
     for g = 1:numel(groups)
         subs = state.Selection.Groups.(groups{g});

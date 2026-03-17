@@ -8,6 +8,7 @@ It focuses on:
 3. How to plot and extract ERP features for downstream statistics
 
 This guide is written against the current code in `+analysis/`.
+Current ERP module version: `analysis.get_version()` (this release: `0.4.0`).
 
 ---
 
@@ -69,6 +70,7 @@ Out = analysis.extract_epoch( ...
   'markers',       {'10','20','30'} );
 
 ds = analysis.Dataset(Out);
+fprintf('ERP module version: v%s\n', analysis.get_version());
 ```
 
 ### 2.2 Create state, define selections, compute ERP results
@@ -159,6 +161,7 @@ analysis.erp_plot_contrast(state2, struct('contrast','G1_vs_G2_win','target','Pz
 `Out` is a study container with:
 
 - `Out.meta`: shared metadata across subjects/conditions
+  - includes `toolbox_version`, `trialN`, and `warnings`
 - `Out.sub_*`: one field per subject (or subject-session key)
   - each condition is stored as a `(chan x time x trials)` matrix
 
@@ -224,8 +227,11 @@ state = analysis.init_state(ds);
 
 - `analysis.define_group(state, struct('name',..., 'subjects',{...}))`
 - `analysis.select_conditions(state, struct('conditions',{...}))`
+  - selection is case-insensitive and preserves user-provided order
 - `analysis.define_roi(state, struct('name',..., 'labels',{...}))`
+  - channel matching is case-insensitive
 - `analysis.define_time_window(state, struct('name',..., 'range',[start end]))`
+  - window must overlap dataset time range
 
 ### 4.4 ERP computation
 
@@ -245,12 +251,14 @@ state = analysis.init_state(ds);
     - `alpha` (default 0.05)
     - `mcc` (`'none'` or `'fdr'`)
     - `time_window` (optional `[start end]` ms)
+  - significance output is point-wise t-test significance segments (not cluster-permutation inference)
 
 ### 4.6 Plotting
 
-- `analysis.erp_plot_erp(state, struct('target',..., 'smoothing_factor',1, 'show_error','se'|'sd'|'none', ...))`
+- `analysis.erp_plot_erp(state, struct('target',..., 'smoothing_factor',1, 'show_error','se'|'sd'|'std'|'none', ...))`
 - `analysis.erp_plot_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
 - `analysis.erp_plot_topo(state, struct('time_window',...))`
+  - ERP line plots use EEG convention: negative up / positive down
 
 ### 4.7 Feature extraction
 
@@ -308,7 +316,7 @@ ERP contrasts are defined between two GA terms:
 - `pos_group == neg_group`, and
 - the subject lists for the two terms are identical
 
-If some subjects are missing one condition, it uses the intersection for paired tests (with a warning).
+If some subjects are missing one condition, it uses the intersection for paired tests (with a warning), and requires at least 2 paired subjects.
 
 ---
 
@@ -329,7 +337,7 @@ Fix:
 Fix:
 
 - Confirm channel labels in `ds.chanlocs`.
-- Adjust ROI labels (case matters).
+- Adjust ROI labels (matching is case-insensitive, but label spelling must still be correct).
 
 ### Conditions not found
 

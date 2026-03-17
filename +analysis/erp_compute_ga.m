@@ -5,7 +5,7 @@ function state = erp_compute_ga(state, ~, ~)
     if isempty(state.Selection.Conditions), error('No conditions selected.'); end
 
     state.Results.GA = struct();
-    fprintf('Computing GA...\n');
+    fprintf('Computing GA... [EEGflow v%s]\n', analysis.get_version());
 
     for g = 1:numel(groups)
         gn = groups{g};

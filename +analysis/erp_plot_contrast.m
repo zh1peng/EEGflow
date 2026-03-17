@@ -2,7 +2,7 @@ function state = erp_plot_contrast(state, args, meta)
 %ERP_PLOT_CONTRAST Plot an ERP contrast with optional significance shading.
 % Args:
 %   contrast (char), target (char), show_sig (bool), sig_alpha, sig_color,
-%   time_window (1x2), smoothing_factor, show_error, ErrorAlpha, ErrorColor,
+%   time_window (1x2), smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor,
 %   show_diff (bool)
 
     if nargin < 2, args = struct(); end
@@ -21,6 +21,8 @@ function state = erp_plot_contrast(state, args, meta)
     if ~isfield(args, 'ErrorColor'), args.ErrorColor = []; end
     if ~isfield(args, 'show_diff'), args.show_diff = false; end
 
+    state_check(state, 'GA');
+    ver = analysis.get_version();
     if ~isfield(state.Results, 'Contrasts') || ~isfield(state.Results.Contrasts, args.contrast)
         error('Contrast "%s" not found. Run erp_define_contrast first.', args.contrast);
     end
@@ -81,6 +83,7 @@ function state = erp_plot_contrast(state, args, meta)
     end
 
     if args.show_sig && isfield(contrast_def, 'Stats') && isfield(contrast_def.Stats, 'h')
+        validate_stats_target(contrast_def.Stats, args.target, args.time_window, times);
         sig_mask = contrast_def.Stats.h;
         if size(sig_mask, 1) > 1
             sig_mask = any(sig_mask(chan_idx, :), 1);
@@ -89,10 +92,13 @@ function state = erp_plot_contrast(state, args, meta)
         if ~isempty(wins)
             yl = ylim(ax);
             for i = 1:size(wins, 1)
-                area(ax, [wins(i, 1), wins(i, 2)], [yl(2) yl(2)], ...
-                    'FaceColor', args.sig_color, 'FaceAlpha', args.sig_alpha, 'HandleVisibility', 'off');
-                area(ax, [wins(i, 1), wins(i, 2)], [yl(1) yl(1)], ...
-                    'FaceColor', args.sig_color, 'FaceAlpha', args.sig_alpha, 'HandleVisibility', 'off');
+                patch(ax, ...
+                    [wins(i, 1), wins(i, 2), wins(i, 2), wins(i, 1)], ...
+                    [yl(1), yl(1), yl(2), yl(2)], ...
+                    args.sig_color, ...
+                    'FaceAlpha', args.sig_alpha, ...
+                    'EdgeColor', 'none', ...
+                    'HandleVisibility', 'off');
             end
         end
     end
@@ -102,12 +108,13 @@ function state = erp_plot_contrast(state, args, meta)
     end
     grid(ax, 'on');
     box(ax, 'on');
+    set(ax, 'YDir', 'reverse');
     xlabel(ax, 'Time (ms)', 'Interpreter', 'none');
     ylabel(ax, 'Amplitude (uV)', 'Interpreter', 'none');
-    title(ax, sprintf('%s (%s)', args.contrast, plot_title), 'Interpreter', 'none');
+    title(ax, sprintf('%s (%s) | EEGflow v%s', args.contrast, plot_title, ver), 'Interpreter', 'none');
 
     legend_handles = [h_pos, h_neg];
-    legend_labels = {pos_cond, neg_cond};
+    legend_labels = {sprintf('%s:%s', pos_group, pos_cond), sprintf('%s:%s', neg_group, neg_cond)};
     if args.show_diff
         legend_handles(end+1) = h_diff; %#ok<AGROW>
         legend_labels{end+1} = args.contrast; %#ok<AGROW>
@@ -122,5 +129,23 @@ function c = pick_err_color(user_color, fallback)
         c = fallback;
     else
         c = user_color;
+    end
+end
+
+function validate_stats_target(stats, target, plot_tw, times)
+    if isfield(stats, 'roi') && ~isempty(stats.roi) && ~strcmp(stats.roi, target)
+        error('Stats were computed on ROI "%s" but plot target is "%s".', stats.roi, target);
+    end
+
+    if ~isfield(stats, 'time_window') || isempty(stats.time_window)
+        return;
+    end
+    stats_tw = stats.time_window;
+    if isempty(plot_tw)
+        plot_tw = [times(1), times(end)];
+    end
+    if plot_tw(2) < stats_tw(1) || plot_tw(1) > stats_tw(2)
+        warning('Plot time window [%g %g] ms does not overlap stats window [%g %g] ms.', ...
+            plot_tw(1), plot_tw(2), stats_tw(1), stats_tw(2));
     end
 end

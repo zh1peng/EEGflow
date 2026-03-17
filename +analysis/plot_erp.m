@@ -1,5 +1,5 @@
 function state = plot_erp(state, args, meta)
-    % Args: target, smoothing_factor, show_error, ErrorAlpha, ErrorColor
+    % Args: target, smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor
     if nargin < 2, args = struct(); end
     if ~isfield(args, 'target'), error('Target required'); end
     if ~isfield(args, 'smoothing_factor'), args.smoothing_factor = 1; end
@@ -13,6 +13,7 @@ function state = plot_erp(state, args, meta)
     end
 
     state_check(state, 'GA');
+    ver = analysis.get_version();
     [idxs, title_str] = state_get_indices(state, args.target);
     times = state.Dataset.times;
     group_names = fieldnames(state.Results.GA);
@@ -62,7 +63,7 @@ function state = plot_erp(state, args, meta)
         grid on; box on;
         xlabel('Time (ms)', 'Interpreter', 'none');
         ylabel('Amplitude (uV)', 'Interpreter', 'none');
-        title(sprintf('ERP for %s (Group: %s)', title_str, group_name), 'Interpreter', 'none');
+        title(sprintf('ERP for %s (Group: %s) | EEGflow v%s', title_str, group_name, ver), 'Interpreter', 'none');
         legend(plot_handles, legend_labels, 'Location', 'best', 'Interpreter', 'none');
         ax = gca;
         hline = line(ax.XLim, [0 0], 'Color', 'k', 'LineStyle', '--');

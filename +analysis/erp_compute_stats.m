@@ -1,10 +1,14 @@
 function state = erp_compute_stats(state, args, ~)
     % Args: contrast, roi, alpha, mcc, time_window
     if nargin < 2, args = struct(); end
+    if ~isfield(args, 'contrast'), args.contrast = ''; end
     if ~isfield(args, 'alpha'), args.alpha = 0.05; end
     if ~isfield(args, 'mcc'), args.mcc = 'none'; end
     if ~isfield(args, 'time_window'), args.time_window = []; end
     if ~isfield(args, 'roi'), args.roi = ''; end
+    if ~(strcmpi(args.mcc, 'none') || strcmpi(args.mcc, 'fdr'))
+        error('mcc must be "none" or "fdr".');
+    end
 
     if ~exist('ttest', 'file')
         error('This function requires the Statistics and Machine Learning Toolbox.');
@@ -16,7 +20,8 @@ function state = erp_compute_stats(state, args, ~)
         error('Specify a valid contrast name.');
     end
 
-    fprintf('Computing stats for contrast "%s"...\n', cname);
+    ver = analysis.get_version();
+    fprintf('Computing stats for contrast "%s"... [EEGflow v%s]\n', cname, ver);
 
     def = state.Results.Contrasts.(cname);
     pos_group = def.positive_term{1};
@@ -51,6 +56,9 @@ function state = erp_compute_stats(state, args, ~)
         if numel(common_subs) < numel(pos_found) || numel(common_subs) < numel(neg_found)
             warning('Unequal subjects for paired test. Using %d common subjects.', numel(common_subs));
         end
+        if numel(common_subs) < 2
+            error('Paired stats require at least 2 common subjects. Found %d.', numel(common_subs));
+        end
         if data_dim == 3
             pos_paired = pos_data(:, :, ia);
             neg_paired = neg_data(:, :, ib);
@@ -62,13 +70,27 @@ function state = erp_compute_stats(state, args, ~)
         [~, p, ~, stats] = ttest(diff_data, 0, 'dim', data_dim);
         t = stats.tstat;
     else
+        if size(pos_data, data_dim) < 2 || size(neg_data, data_dim) < 2
+            warning('Unpaired stats are being computed with <2 subjects in at least one term.');
+        end
         [~, p, ~, stats] = ttest2(pos_data, neg_data, 'dim', data_dim);
         t = stats.tstat;
+    end
+    if data_dim == 2
+        p = reshape(p, 1, []);
+        t = reshape(t, 1, []);
     end
 
     time_indices = 1:size(state.Dataset.times, 2);
     if ~isempty(args.time_window)
+        if ~isnumeric(args.time_window) || numel(args.time_window) ~= 2 || args.time_window(1) >= args.time_window(2)
+            error('time_window must be [start end] in ms.');
+        end
         time_indices = state.Dataset.times >= args.time_window(1) & state.Dataset.times <= args.time_window(2);
+        if ~any(time_indices)
+            error('time_window [%g %g] ms does not overlap dataset time range [%g %g] ms.', ...
+                args.time_window(1), args.time_window(2), state.Dataset.times(1), state.Dataset.times(end));
+        end
         if data_dim == 3
             p = p(:, time_indices);
             t = t(:, time_indices);
@@ -101,22 +123,22 @@ function state = erp_compute_stats(state, args, ~)
     h = p_corrected < args.alpha;
 
     tvec = state.Dataset.times(time_indices);
-    sig_clusters = cell(size(h, 1), 1);
+    sig_segments = cell(size(h, 1), 1);
     any_found = false;
     for ch = 1:size(h, 1)
-        clusters = state_get_sig_windows(h(ch, :), tvec);
-        if ~isempty(clusters)
+        segments = state_get_sig_windows(h(ch, :), tvec);
+        if ~isempty(segments)
             any_found = true;
-            sig_clusters{ch} = clusters;
+            sig_segments{ch} = segments;
             if isempty(args.roi)
-                fprintf('Ch %s: %d significant cluster(s).\n', state.Dataset.chanlocs(ch).labels, size(clusters, 1));
+                fprintf('Ch %s: %d significant segment(s).\n', state.Dataset.chanlocs(ch).labels, size(segments, 1));
             else
-                fprintf('ROI %s: %d significant cluster(s).\n', args.roi, size(clusters, 1));
+                fprintf('ROI %s: %d significant segment(s).\n', args.roi, size(segments, 1));
             end
         end
     end
     if ~any_found
-        fprintf('No significant clusters found.\n');
+        fprintf('No significant segments found.\n');
     end
 
     if ~isempty(args.roi)
@@ -137,7 +159,8 @@ function state = erp_compute_stats(state, args, ~)
     state.Results.Contrasts.(cname).Stats.p_corrected = full_p_corrected;
     state.Results.Contrasts.(cname).Stats.t = full_t;
     state.Results.Contrasts.(cname).Stats.h = full_h;
-    state.Results.Contrasts.(cname).Stats.sig_clusters = sig_clusters;
+    state.Results.Contrasts.(cname).Stats.sig_segments = sig_segments;
+    state.Results.Contrasts.(cname).Stats.sig_clusters = sig_segments; % backward compatibility
     state.Results.Contrasts.(cname).Stats.alpha = args.alpha;
     state.Results.Contrasts.(cname).Stats.mcc = args.mcc;
     state.Results.Contrasts.(cname).Stats.is_paired = is_paired;

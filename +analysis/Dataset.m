@@ -9,7 +9,8 @@ classdef Dataset
         chanlocs    % Channel locations struct
         times       % Vector of time points for epochs
         fs          % Sampling frequency
-        summary     % Summary table from Out.meta.summary
+        summary     % Summary table from Out.meta.trialN/summary
+        toolbox_version % Version string saved by extract_epoch (if available)
     end
 
     methods
@@ -41,13 +42,20 @@ classdef Dataset
             obj.chanlocs   = meta.chanlocs;
             obj.times      = meta.times;
             obj.fs         = meta.fs;
-            if isfield(meta, 'summary')
+            if isfield(meta, 'trialN')
+                obj.summary = meta.trialN;
+            elseif isfield(meta, 'summary')
                 obj.summary = meta.summary;
             else
                 obj.summary = [];
             end
+            if isfield(meta, 'toolbox_version') && ~isempty(meta.toolbox_version)
+                obj.toolbox_version = char(meta.toolbox_version);
+            else
+                obj.toolbox_version = analysis.get_version();
+            end
 
-            fprintf('Dataset created with %d subjects.\n', numel(obj.subjects));
+            fprintf('Dataset created with %d subjects. [EEGflow v%s]\n', numel(obj.subjects), obj.toolbox_version);
         end
 
         function data_matrix = get_data(obj, subject_id, condition_name)
@@ -59,14 +67,24 @@ classdef Dataset
             % 
             % Returns empty [] if the subject or condition is not found.
 
-            arguments
-                obj
-                subject_id char
-                condition_name char
-            end
+            if isstring(subject_id), subject_id = char(subject_id); end
+            if isstring(condition_name), condition_name = char(condition_name); end
 
             data_matrix = [];
             sub_field = subject_id;
+            if ~isfield(obj.data, sub_field)
+                if startsWith(subject_id, 'sub_')
+                    stripped = subject_id(5:end);
+                    if isfield(obj.data, stripped)
+                        sub_field = stripped;
+                    end
+                else
+                    prefixed = ['sub_' subject_id];
+                    if isfield(obj.data, prefixed)
+                        sub_field = prefixed;
+                    end
+                end
+            end
             cond_field = condition_name;
             if ~isvarname(cond_field)
                 cond_field = obj.make_field_key(cond_field);

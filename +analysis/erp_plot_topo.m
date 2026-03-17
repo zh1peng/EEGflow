@@ -11,6 +11,7 @@ function state = erp_plot_topo(state, args, meta)
     end
 
     state_check(state, 'GA');
+    ver = analysis.get_version();
     if ~isfield(state.Selection, 'TimeWindows') || ~isfield(state.Selection.TimeWindows, args.time_window)
         error('Time window "%s" not found. Define it first.', args.time_window);
     end
@@ -66,5 +67,8 @@ function state = erp_plot_topo(state, args, meta)
         if isprop(cb, 'TickLabelInterpreter')
             set(cb, 'TickLabelInterpreter', 'none');
         end
+    end
+    if exist('sgtitle', 'file')
+        sgtitle(sprintf('Topography | %s | EEGflow v%s', args.time_window, ver), 'Interpreter', 'none');
     end
 end

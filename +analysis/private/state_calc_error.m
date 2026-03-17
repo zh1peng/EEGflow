@@ -16,9 +16,9 @@ function err = state_calc_error(type, stack, idxs)
     switch lower(type)
         case 'se'
             err = std(data, 0, 2)' / sqrt(n);
-        case 'std'
+        case {'std', 'sd'}
             err = std(data, 0, 2)';
         otherwise
-            err = [];
+            error('Unsupported show_error type "%s". Use "se", "sd"/"std", or "none".', type);
     end
 end

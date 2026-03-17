@@ -3,6 +3,12 @@ function state = erp_define_contrast(state, args, ~)
 % Args: name, pos_term {Group, Cond}, neg_term {Group, Cond}
 
     state_check(state, 'GA');
+    if ~isfield(args, 'name') || isempty(args.name)
+        error('name is required.');
+    end
+    if ~isfield(args, 'pos_term') || ~isfield(args, 'neg_term')
+        error('pos_term and neg_term are required.');
+    end
     name = args.name;
     pos = args.pos_term;
     neg = args.neg_term;
@@ -16,7 +22,7 @@ function state = erp_define_contrast(state, args, ~)
     state.Results.Contrasts.(name).negative_term = neg;
     state.Results.Contrasts.(name).n_positive = pos_n;
     state.Results.Contrasts.(name).n_negative = neg_n;
-    fprintf('Contrast "%s" computed.\n', name);
+    fprintf('Contrast "%s" computed. [EEGflow v%s]\n', name, analysis.get_version());
 end
 
 function [erp, n] = get_ga_term(state, term)

@@ -163,6 +163,8 @@ addParameter(p,'run_tag',datestr(now,'yyyy-mm-dd_HHMMSS'),@ischar);
 
 parse(p,varargin{:});
 opt = p.Results;
+toolbox_ver = analysis.get_version();
+fprintf('analysis.extract_epoch start [EEGflow v%s]\n', toolbox_ver);
 
 assert(~isempty(opt.study_path)&&isfolder(opt.study_path), 'study_path not found.');
 assert(~isempty(opt.markers), 'markers is required.');
@@ -177,7 +179,7 @@ setFiles = fullfile(paths, names);
 assert(~isempty(setFiles), 'No .set files matched searchstring in study_path.');
 
 %% ---- Initialize output container
-conds = sort(unique(lower(resolveMany(markers, alias_mk, alias_cond))));
+conds = unique(lower(resolveMany(markers, alias_mk, alias_cond)), 'stable');
 Out = struct();
 Out.meta = struct( ...
     'fs',              [], ...
@@ -192,6 +194,8 @@ Out.meta = struct( ...
     'run_tag',         opt.run_tag, ...
     'version',         1);
 Out.meta.conditions = conds;
+Out.meta.toolbox_version = toolbox_ver;
+Out.meta.warnings = {};
 
 %% ---- Iterate files (per subject)
 firstMetaLocked = false;
@@ -369,6 +373,8 @@ Tw{:, allConds} = fillmissing(Tw{:, allConds}, 'constant', 0);
 
 % Attach to output
 Out.meta.trialN = Tw;
+Out.meta.summary = Tw;  % backward compatibility
+Out.meta.warnings = warns;
 
 %% ---- Save if requested
 if ~isempty(opt.save_path)
@@ -381,9 +387,10 @@ end
 
 % Optional: print warnings
 if ~isempty(warns)
-    fprintf('=== Extraction warnings (%%d) ===\n', numel(warns));
+    fprintf('=== Extraction warnings (%d) ===\n', numel(warns));
     fprintf('%s\n', strjoin(warns,newline));
 end
+fprintf('analysis.extract_epoch done [EEGflow v%s]\n', toolbox_ver);
 
 end  % main function
 
