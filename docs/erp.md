@@ -8,7 +8,7 @@ It focuses on:
 3. How to plot and extract ERP features for downstream statistics
 
 This guide is written against the current code in `+analysis/`.
-Current ERP module version: `analysis.get_version()` (this release: `0.5.0`).
+Current ERP module version: `analysis.get_version()` (this release: `0.6.0`).
 
 ---
 
@@ -281,8 +281,7 @@ state = analysis.init_state(ds);
 ### 4.7 Plotting
 
 - `analysis.erp_plot_erp(state, struct('target',..., 'smoothing_factor',1, 'show_error','se'|'sd'|'std'|'none', ...))`
-  - preferred canonical GA ERP plotting entry point
-  - `analysis.plot_erp` remains available as a legacy alias
+  - canonical GA ERP plotting entry point
   - ERP line plots use EEG convention: negative up / positive down
 - `analysis.erp_plot_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
   - if `time_window` is provided, it only changes the displayed x-axis limits

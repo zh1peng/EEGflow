@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.6.0 - 2026-03-20
+
+- Removed the redundant `analysis.plot_erp` alias and made `analysis.erp_plot_erp` the single canonical GA ERP plotting entry point.
+- Bumped analysis module version to `0.6.0`.
+- Clarified ERP waveform stats semantics in `docs/erp.md`:
+  - waveform stats default to the full ERP epoch,
+  - `time_window` in `erp_compute_stats` / `erp_compute_subject_contrast_stats` is an explicit override,
+  - plot-time `time_window` is display-only for waveform figures.
+
 ## v0.5.0 - 2026-03-17
 
 - Added `analysis.Dataset.merge(new_cond_name, conds_to_merge)` for strict trial-level condition merging without overwriting source conditions.
