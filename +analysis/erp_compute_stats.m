@@ -1,4 +1,5 @@
 function state = erp_compute_stats(state, args, ~)
+    % Default: full ERP epoch. time_window is an explicit override for stats.
     % Args: contrast, roi, alpha, mcc, time_window
     if nargin < 2, args = struct(); end
     if ~isfield(args, 'contrast'), args.contrast = ''; end

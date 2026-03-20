@@ -15,6 +15,7 @@ function reg = init_registry()
     reg('erp_define_contrast') = @analysis.erp_define_contrast;
     reg('erp_compute_stats') = @analysis.erp_compute_stats;
     reg('erp_plot_erp') = @analysis.erp_plot_erp;
+    reg('plot_erp') = @analysis.erp_plot_erp; % legacy alias for backward compatibility
     reg('erp_plot_contrast') = @analysis.erp_plot_contrast;
     reg('erp_plot_topo') = @analysis.erp_plot_topo;
     reg('erp_extract_feature') = @analysis.erp_extract_feature;

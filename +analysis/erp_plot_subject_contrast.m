@@ -2,7 +2,7 @@ function state = erp_plot_subject_contrast(state, args, meta)
 %ERP_PLOT_SUBJECT_CONTRAST Plot subject-level ERP difference wave with optional stats shading.
 % Args:
 %   contrast (char), target (char), show_sig (bool), sig_alpha, sig_color,
-%   time_window (1x2), smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor
+%   time_window (1x2, display only), smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor
 
     if nargin < 2, args = struct(); end
     if nargin >= 3 && isfield(meta, 'validate_only') && meta.validate_only

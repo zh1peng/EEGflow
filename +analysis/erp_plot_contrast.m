@@ -2,7 +2,7 @@ function state = erp_plot_contrast(state, args, meta)
 %ERP_PLOT_CONTRAST Plot an ERP contrast with optional significance shading.
 % Args:
 %   contrast (char), target (char), show_sig (bool), sig_alpha, sig_color,
-%   time_window (1x2), smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor,
+%   time_window (1x2, display only), smoothing_factor, show_error(se|sd|std|none), ErrorAlpha, ErrorColor,
 %   show_diff (bool)
 
     if nargin < 2, args = struct(); end

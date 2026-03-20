@@ -1,5 +1,6 @@
 function state = erp_compute_subject_contrast_stats(state, args, ~)
 %ERP_COMPUTE_SUBJECT_CONTRAST_STATS One-sample stats for subject-level ERP contrasts.
+% Default: full ERP epoch. time_window is an explicit override for stats.
 % Args:
 %   contrast, roi, alpha, mcc, time_window
 

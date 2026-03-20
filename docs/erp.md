@@ -257,6 +257,8 @@ state = analysis.init_state(ds);
 
 - `analysis.erp_define_contrast(state, struct('name',..., 'pos_term',{{group,cond}}, 'neg_term',{{group,cond}}))`
 - `analysis.erp_compute_stats(state, struct(...))`
+  - default: computes waveform statistics across the full ERP epoch
+  - `time_window` is an explicit override if you want to restrict the inferential range
   - args:
     - `contrast` (name)
     - `roi` (optional ROI name; if empty, stats across channels)
@@ -271,16 +273,24 @@ state = analysis.init_state(ds);
   - computes subject-level difference waves and stores them in `state.Results.SubjectContrasts`
 
 - `analysis.erp_compute_subject_contrast_stats(state, struct(...))`
+  - default: computes waveform statistics across the full ERP epoch
+  - `time_window` is an explicit override if you want to restrict the inferential range
   - args: `contrast`, `roi` (optional), `alpha`, `mcc`, `time_window` (optional)
   - one-sample t-test of subject-level difference waves against zero
 
 ### 4.7 Plotting
 
 - `analysis.erp_plot_erp(state, struct('target',..., 'smoothing_factor',1, 'show_error','se'|'sd'|'std'|'none', ...))`
-- `analysis.erp_plot_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
-- `analysis.erp_plot_subject_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
-- `analysis.erp_plot_topo(state, struct('time_window',...))`
+  - preferred canonical GA ERP plotting entry point
+  - `analysis.plot_erp` remains available as a legacy alias
   - ERP line plots use EEG convention: negative up / positive down
+- `analysis.erp_plot_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
+  - if `time_window` is provided, it only changes the displayed x-axis limits
+  - significance shading comes from the stats already stored in `Stats.h`
+- `analysis.erp_plot_subject_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
+  - same rule as `erp_plot_contrast`: plot window is display-only, shading comes from `Stats.h`
+- `analysis.erp_plot_topo(state, struct('time_window',...))`
+  - `time_window` here is a named selection window used for topography lookup
 
 ### 4.8 Feature extraction
 
