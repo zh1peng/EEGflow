@@ -1,4 +1,5 @@
 /data/*
 /out/*
 /test/*
+!/test/analysis_erp_subject_contrast_test.m
 /discover-eeg-master/*

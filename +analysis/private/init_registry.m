@@ -18,6 +18,10 @@ function reg = init_registry()
     reg('erp_plot_contrast') = @analysis.erp_plot_contrast;
     reg('erp_plot_topo') = @analysis.erp_plot_topo;
     reg('erp_extract_feature') = @analysis.erp_extract_feature;
+    reg('erp_compute_subject_contrast') = @analysis.erp_compute_subject_contrast;
+    reg('erp_compute_subject_contrast_stats') = @analysis.erp_compute_subject_contrast_stats;
+    reg('erp_plot_subject_contrast') = @analysis.erp_plot_subject_contrast;
+    reg('erp_extract_subject_contrast_feature') = @analysis.erp_extract_subject_contrast_feature;
 
     % TF
     reg('tf_transform') = @analysis.tf_transform;

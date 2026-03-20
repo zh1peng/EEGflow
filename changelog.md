@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.5.0 - 2026-03-17
+
+- Added `analysis.Dataset.merge(new_cond_name, conds_to_merge)` for strict trial-level condition merging without overwriting source conditions.
+- Added strict metadata synchronization in Dataset merge for `meta.conditions`, `meta.trialN`, `meta.summary`, and `meta.derived_conditions`.
+- Added subject-level ERP difference-wave workflow (within-group only):
+  - `analysis.erp_compute_subject_contrast`
+  - `analysis.erp_compute_subject_contrast_stats`
+  - `analysis.erp_plot_subject_contrast`
+  - `analysis.erp_extract_subject_contrast_feature`
+- Added `state.Results.SubjectContrasts` as a dedicated storage branch for subject-level difference waves and their stats/features.
+- Registered all new subject-contrast ERP ops in analysis registry for pipeline compatibility.
+- Updated ERP guide (`docs/erp.md`) with Dataset merge usage and full subject-contrast analysis flow.
+- Bumped analysis module version to `0.5.0`.
+
 ## v0.4.0 - 2026-03-17
 
 - Added `analysis.get_version()` and surfaced version info (`v0.4.0`) in ERP compute logs and ERP figure titles for easier run/result traceability.
@@ -20,7 +34,7 @@
   - added argument validation for `mcc` and `time_window`,
   - added minimum-subject guard for paired tests,
   - fixed ROI stats shape handling to keep time vectors aligned,
-  - renamed reported outputs to “significant segments” (and kept `sig_clusters` as backward-compatible alias).
+  - renamed reported outputs to "significant segments" (and kept `sig_clusters` as backward-compatible alias).
 - Improved feature extraction robustness:
   - validates window overlap,
   - enforces consistent feature output length across rows,

@@ -25,6 +25,10 @@ function state_check(state, req_field)
                 if ~isfield(state.Results, 'Contrasts') || isempty(fieldnames(state.Results.Contrasts))
                     error('analysis_state:MissingResult', 'Contrasts not found. Define contrasts first.');
                 end
+            case 'SubjectContrasts'
+                if ~isfield(state.Results, 'SubjectContrasts') || isempty(fieldnames(state.Results.SubjectContrasts))
+                    error('analysis_state:MissingResult', 'Subject contrasts not found. Run erp_compute_subject_contrast first.');
+                end
         end
     end
 end

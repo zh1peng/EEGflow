@@ -8,7 +8,7 @@ It focuses on:
 3. How to plot and extract ERP features for downstream statistics
 
 This guide is written against the current code in `+analysis/`.
-Current ERP module version: `analysis.get_version()` (this release: `0.4.0`).
+Current ERP module version: `analysis.get_version()` (this release: `0.5.0`).
 
 ---
 
@@ -71,6 +71,9 @@ Out = analysis.extract_epoch( ...
 
 ds = analysis.Dataset(Out);
 fprintf('ERP module version: v%s\n', analysis.get_version());
+
+% Dataset is a value class: assign merge output
+ds = ds.merge('cue_all', {'win_cue','loss_cue','neut_cue'});
 ```
 
 ### 2.2 Create state, define selections, compute ERP results
@@ -186,6 +189,7 @@ analysis.erp_plot_contrast(state2, struct('contrast','G1_vs_G2_win','target','Pz
 - `state.Results.*`:
   - `ERPs`: per-subject ERPs
   - `GA`: grand averages per group and condition
+  - `SubjectContrasts`: subject-level difference waves and stats
   - `Contrasts`: contrast definitions and stats
   - `Features`: extracted feature tables
 
@@ -233,7 +237,15 @@ state = analysis.init_state(ds);
 - `analysis.define_time_window(state, struct('name',..., 'range',[start end]))`
   - window must overlap dataset time range
 
-### 4.4 ERP computation
+### 4.4 Dataset condition merge
+
+- `ds = ds.merge('new_cond', {'condA','condB',...})`
+  - concatenates source trials along the 3rd dimension
+  - source conditions are preserved; overwrite is not allowed
+  - strict mode: missing condition/empty data/shape mismatch raises error
+  - updates `meta.conditions`, `meta.trialN`, `meta.summary`, and `meta.derived_conditions`
+
+### 4.5 ERP computation
 
 - `analysis.erp_compute_erps(state, struct('method','mean'|'median'|'trimmed', 'percent',5))`
   - computes subject-level ERPs by averaging across trials
@@ -241,7 +253,7 @@ state = analysis.init_state(ds);
 - `analysis.erp_compute_ga(state, struct())`
   - computes group-level grand averages from subject ERPs
 
-### 4.5 Contrasts and stats
+### 4.6 Contrasts and stats
 
 - `analysis.erp_define_contrast(state, struct('name',..., 'pos_term',{{group,cond}}, 'neg_term',{{group,cond}}))`
 - `analysis.erp_compute_stats(state, struct(...))`
@@ -253,14 +265,24 @@ state = analysis.init_state(ds);
     - `time_window` (optional `[start end]` ms)
   - significance output is point-wise t-test significance segments (not cluster-permutation inference)
 
-### 4.6 Plotting
+- `analysis.erp_compute_subject_contrast(state, struct(...))`
+  - args: `name`, `pos_term={{group,condA}}`, `neg_term={{group,condB}}`
+  - within-group only (strict)
+  - computes subject-level difference waves and stores them in `state.Results.SubjectContrasts`
+
+- `analysis.erp_compute_subject_contrast_stats(state, struct(...))`
+  - args: `contrast`, `roi` (optional), `alpha`, `mcc`, `time_window` (optional)
+  - one-sample t-test of subject-level difference waves against zero
+
+### 4.7 Plotting
 
 - `analysis.erp_plot_erp(state, struct('target',..., 'smoothing_factor',1, 'show_error','se'|'sd'|'std'|'none', ...))`
 - `analysis.erp_plot_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
+- `analysis.erp_plot_subject_contrast(state, struct('contrast',..., 'target',..., 'show_sig',true, ...))`
 - `analysis.erp_plot_topo(state, struct('time_window',...))`
   - ERP line plots use EEG convention: negative up / positive down
 
-### 4.7 Feature extraction
+### 4.8 Feature extraction
 
 - `[state, T] = analysis.erp_extract_feature(state, struct(...))`
   - args:
@@ -268,6 +290,10 @@ state = analysis.init_state(ds);
     - `time_window` (required)
     - `feature_func` (`'mean'|'median'|'peak'|'latency'` or function handle)
     - `peak_polarity` (`'max'|'min'`)
+
+- `[state, T] = analysis.erp_extract_subject_contrast_feature(state, struct(...))`
+  - args: `contrast`, `roi`, `time_window`, `feature_func`, `peak_polarity`
+  - returns one row per subject for a subject-level ERP contrast
 
 ---
 

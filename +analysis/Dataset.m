@@ -58,6 +58,98 @@ classdef Dataset
             fprintf('Dataset created with %d subjects. [EEGflow v%s]\n', numel(obj.subjects), obj.toolbox_version);
         end
 
+        function obj = merge(obj, new_cond_name, conds_to_merge)
+            %MERGE Merge multiple conditions into a new condition by trial concatenation.
+            % Usage:
+            %   ds = ds.merge('combined', {'cond1', 'cond2'});
+            %
+            % Notes:
+            %   - Dataset is a value class. You must assign the return value.
+            %   - Source conditions are preserved. This method only adds a new condition.
+            %
+            arguments
+                obj
+                new_cond_name char
+                conds_to_merge cell
+            end
+
+            conds_to_merge = cellstr(conds_to_merge);
+            conds_to_merge = conds_to_merge(:)';
+            if numel(conds_to_merge) < 2
+                error('At least two source conditions are required for merge.');
+            end
+            conds_to_merge = unique(conds_to_merge, 'stable');
+
+            new_cond_name = char(new_cond_name);
+            new_cond_field = obj.make_field_key(new_cond_name);
+            cond_fields_to_merge = cellfun(@(c) obj.make_field_key(c), conds_to_merge, 'UniformOutput', false);
+
+            existing_name_hit = strcmpi(new_cond_name, obj.conditions);
+            if any(existing_name_hit)
+                error('Condition "%s" already exists. Use a new condition name.', new_cond_name);
+            end
+            existing_cond_fields = cellfun(@(c) obj.make_field_key(c), obj.conditions, 'UniformOutput', false);
+            if any(strcmp(new_cond_field, existing_cond_fields))
+                error('Condition key collision: "%s" conflicts with an existing condition field.', new_cond_field);
+            end
+
+            for i_sub = 1:numel(obj.subjects)
+                sub_id = obj.subjects{i_sub};
+                if ~isfield(obj.data, sub_id)
+                    error('Subject field "%s" not found in Dataset.data.', sub_id);
+                end
+
+                merged_matrix = [];
+                for i_cond = 1:numel(cond_fields_to_merge)
+                    src_field = cond_fields_to_merge{i_cond};
+                    src_name = conds_to_merge{i_cond};
+                    if ~isfield(obj.data.(sub_id), src_field)
+                        error('Subject %s is missing required condition "%s".', sub_id, src_name);
+                    end
+
+                    current_matrix = obj.data.(sub_id).(src_field);
+                    if isempty(current_matrix)
+                        error('Subject %s has empty data for required condition "%s".', sub_id, src_name);
+                    end
+                    if ndims(current_matrix) ~= 3
+                        error('Condition "%s" for subject %s must be [chan x time x trial].', src_name, sub_id);
+                    end
+
+                    if isempty(merged_matrix)
+                        merged_matrix = current_matrix;
+                    else
+                        if size(merged_matrix, 1) ~= size(current_matrix, 1) || size(merged_matrix, 2) ~= size(current_matrix, 2)
+                            error(['Cannot merge condition "%s" for subject %s due to size mismatch. ' ...
+                                'Expected [chan,time]=[%d,%d], got [%d,%d].'], ...
+                                src_name, sub_id, size(merged_matrix, 1), size(merged_matrix, 2), ...
+                                size(current_matrix, 1), size(current_matrix, 2));
+                        end
+                        merged_matrix = cat(3, merged_matrix, current_matrix);
+                    end
+                end
+
+                obj.data.(sub_id).(new_cond_field) = merged_matrix;
+            end
+
+            obj.conditions{end+1} = new_cond_name;
+            obj.data.meta.conditions = obj.conditions;
+
+            trial_counts = zeros(numel(obj.subjects), 1);
+            for i_sub = 1:numel(obj.subjects)
+                sub_id = obj.subjects{i_sub};
+                trial_counts(i_sub) = size(obj.data.(sub_id).(new_cond_field), 3);
+            end
+            obj.data.meta.trialN = obj.update_trial_summary(obj.data.meta, 'trialN', new_cond_field, trial_counts);
+            obj.data.meta.summary = obj.update_trial_summary(obj.data.meta, 'summary', new_cond_field, trial_counts);
+            obj.summary = obj.data.meta.trialN;
+
+            obj.data.meta.derived_conditions = obj.append_derived_condition_record(obj.data.meta, ...
+                new_cond_name, new_cond_field, conds_to_merge, cond_fields_to_merge);
+
+            fprintf('Merged conditions {%s} -> %s (field: %s). [EEGflow v%s]\n', ...
+                strjoin(conds_to_merge, ', '), new_cond_name, new_cond_field, analysis.get_version());
+        end
+
         function data_matrix = get_data(obj, subject_id, condition_name)
             % GET_DATA Retrieve the [chan x time x trials] matrix for a
             % specific subject and condition.
@@ -86,11 +178,14 @@ classdef Dataset
                 end
             end
             cond_field = condition_name;
-            if ~isvarname(cond_field)
-                cond_field = obj.make_field_key(cond_field);
-            end
 
             if isfield(obj.data, sub_field)
+                if ~isfield(obj.data.(sub_field), cond_field)
+                    cond_key = obj.make_field_key(cond_field);
+                    if isfield(obj.data.(sub_field), cond_key)
+                        cond_field = cond_key;
+                    end
+                end
                 if isfield(obj.data.(sub_field), cond_field)
                     data_matrix = obj.data.(sub_field).(cond_field);
                 else
@@ -115,9 +210,49 @@ classdef Dataset
 
     methods (Access = private)
         function key = make_field_key(~, txt)
-            key = lower(regexprep(txt,'[^A-Za-z0-9]','_'));
+            key = lower(regexprep(char(txt),'[^A-Za-z0-9]','_'));
             if ~isempty(key) && isstrprop(key(1),'digit')
                 key = ['x' key];
+            end
+        end
+
+        function tbl = update_trial_summary(obj, meta, field_name, cond_field, trial_counts)
+            if isfield(meta, field_name) && istable(meta.(field_name)) && ~isempty(meta.(field_name))
+                tbl = meta.(field_name);
+                if ~ismember('sub', tbl.Properties.VariableNames)
+                    error('meta.%s must contain a "sub" column.', field_name);
+                end
+                if ~ismember(cond_field, tbl.Properties.VariableNames)
+                    tbl.(cond_field) = zeros(height(tbl), 1);
+                end
+                for i = 1:numel(obj.subjects)
+                    sub_id = obj.subjects{i};
+                    idx = strcmp(tbl.sub, sub_id);
+                    if ~any(idx)
+                        error('meta.%s is missing subject "%s".', field_name, sub_id);
+                    end
+                    tbl.(cond_field)(idx) = trial_counts(i);
+                end
+                return;
+            end
+
+            tbl = table(obj.subjects(:), trial_counts(:), 'VariableNames', {'sub', cond_field});
+        end
+
+        function records = append_derived_condition_record(~, meta, new_name, new_field, src_names, src_fields)
+            entry = struct( ...
+                'name', new_name, ...
+                'field', new_field, ...
+                'source_conditions', {src_names}, ...
+                'source_fields', {src_fields}, ...
+                'operation', 'merge_trials', ...
+                'created_at', datestr(now, 'yyyy-mm-dd HH:MM:SS'));
+
+            if isfield(meta, 'derived_conditions') && ~isempty(meta.derived_conditions)
+                records = meta.derived_conditions;
+                records(end+1) = entry;
+            else
+                records = entry;
             end
         end
     end
