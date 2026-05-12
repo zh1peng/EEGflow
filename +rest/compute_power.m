@@ -1,11 +1,22 @@
 function [power]=compute_power(data, params)
 
-    % Average power spectrum across epochs in the range 1-100 Hz
+    if nargin < 2 || isempty(params)
+        params = struct();
+    end
+    params = rest.normalize_params(params);
+
+    % Average power spectrum across epochs.
     cfg = [];
-    cfg.foilim = [1 100];
     cfg.method = 'mtmfft';
     cfg.taper = params.Taper;
     cfg.tapsmofrq = params.Tapsmofrq;
+    if ~isempty(params.PowerFoi)
+        cfg.foi = params.PowerFoi;
+    elseif ~isempty(params.PowerFreqStep)
+        cfg.foi = params.PowerFreqRange(1):params.PowerFreqStep:params.PowerFreqRange(2);
+    else
+        cfg.foilim = params.PowerFreqRange;
+    end
     if ~isempty(params.Pad)
         cfg.pad = params.Pad;
         cfg.padtype = 'zero';

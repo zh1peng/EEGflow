@@ -20,7 +20,7 @@ function state = tf_plot_contrast(state, args, meta)
     end
     C = state.Results.Contrasts.(cname);
 
-    [freqs, times] = resolve_tf_axes(state, C);
+    [freqs, times] = state_get_tf_axes(state, {}, '', C);
 
     if isfield(C, 'tfd')
         data = C.tfd;
@@ -47,21 +47,4 @@ function state = tf_plot_contrast(state, args, meta)
     figure('Name', ['TF Contrast ' cname]);
     state_imagesc_tfr(times, freqs, plot_data, args);
     title(sprintf('Contrast: %s (%s)', cname, title_str), 'Interpreter', 'none');
-end
-
-function [freqs, times] = resolve_tf_axes(state, C)
-    freqs = []; times = [];
-    if isfield(C, 'freqs'), freqs = C.freqs; end
-    if isfield(C, 'times'), times = C.times; end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found.');
-    end
 end

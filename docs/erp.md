@@ -8,7 +8,7 @@ It focuses on:
 3. How to plot and extract ERP features for downstream statistics
 
 This guide is written against the current code in `+analysis/`.
-Current ERP module version: `analysis.get_version()` (this release: `0.6.0`).
+Current ERP module version: `analysis.get_version()` (this release: `0.7.0`).
 
 ---
 
@@ -112,7 +112,7 @@ state = analysis.erp_compute_stats(state, struct( ...
   'contrast','win_vs_neut', ...
   'roi','Pz_ROI', ...
   'alpha',0.05, ...
-  'mcc','none')); % or 'fdr'
+  'mcc','none')); % 'none'|'fdr'|'cluster'
 
 analysis.erp_plot_contrast(state, struct( ...
   'contrast','win_vs_neut', ...
@@ -263,9 +263,14 @@ state = analysis.init_state(ds);
     - `contrast` (name)
     - `roi` (optional ROI name; if empty, stats across channels)
     - `alpha` (default 0.05)
-    - `mcc` (`'none'` or `'fdr'`)
+    - `mcc` (`'none'`, `'fdr'`, or `'cluster'`)
+    - `n_perm` (for `mcc='cluster'`, default `1000`)
+    - `tail` (for `mcc='cluster'`: `'two'`, `'pos'`, or `'neg'`; default `'two'`)
     - `time_window` (optional `[start end]` ms)
-  - significance output is point-wise t-test significance segments (not cluster-permutation inference)
+  - `mcc='none'` reports point-wise t-test significance segments
+  - `mcc='fdr'` applies Benjamini-Hochberg FDR over the tested waveform points
+  - `mcc='cluster'` applies time-contiguous cluster-mass permutation correction to the waveform
+  - stats results store `subjects_positive`, `subjects_negative`, `subjects_included`, and `subjects_excluded` for reproducibility
 
 - `analysis.erp_compute_subject_contrast(state, struct(...))`
   - args: `name`, `pos_term={{group,condA}}`, `neg_term={{group,condB}}`
@@ -275,8 +280,10 @@ state = analysis.init_state(ds);
 - `analysis.erp_compute_subject_contrast_stats(state, struct(...))`
   - default: computes waveform statistics across the full ERP epoch
   - `time_window` is an explicit override if you want to restrict the inferential range
-  - args: `contrast`, `roi` (optional), `alpha`, `mcc`, `time_window` (optional)
+  - args: `contrast`, `roi` (optional), `alpha`, `mcc`, `n_perm`, `tail`, `time_window` (optional)
   - one-sample t-test of subject-level difference waves against zero
+  - supports the same `mcc='none'|'fdr'|'cluster'` correction choices as `erp_compute_stats`
+  - stats results store `subjects_included` and `n_subjects`
 
 ### 4.7 Plotting
 

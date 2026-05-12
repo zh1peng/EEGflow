@@ -196,6 +196,7 @@ Typical fields:
 - `res.nTrial`: number of epochs used
 - `res.params`: snapshot of params used (large structs stripped)
 - `res.power`: FieldTrip freq struct (sensor PSD)
+- `res.bandpower`: absolute and relative sensor band-power summaries for each configured band
 - `res.peakfrequency`: struct (alpha peak metrics)
 - `res.aperiodic`: struct (aperiodic fit) if `RemoveAperiodic=true`
 - `res.power_osc`: flattened PSD if `RemoveAperiodic=true`
@@ -316,11 +317,17 @@ I/O and logging:
 
 Trial threshold:
 
+- `MinTrials` (default `10`): preferred spelling for the minimum epoch count
 - `nTrial_treshold` (default `10`): skip feature extraction if too few epochs
+  - legacy spelling kept for backward compatibility; `MinTrials` wins if both are provided
 
 Spectral params (sensor PSD):
 
-- `FreqRes` (default `0.1`): legacy field (not currently used by `compute_power`)
+- `PowerFreqRange` (default `[1 100]`): sensor PSD frequency range
+- `PowerFreqStep` (default `FreqRes` when provided): frequency step used to build `cfg.foi`
+- `PowerFoi` (default `[]`): explicit frequency vector; overrides `PowerFreqRange` / `PowerFreqStep`
+- `PeakBand` (default `'alpha'` when available): band used by `compute_peakfrequency`
+- `FreqRes` (default `0.1`): legacy alias for `PowerFreqStep`
 - `Pad` (default `[]`): passed to `ft_freqanalysis` when non-empty
 - `Taper` (default `'dpss'`)
 - `Tapsmofrq` (default `1`)
@@ -378,7 +385,7 @@ Dependency auto-wiring:
 
 - Computes sensor-space power spectral density (PSD) using FieldTrip `ft_freqanalysis`.
 - Current implementation uses multi-taper FFT across epochs and averages (`keeptrials='no'`).
-- Frequency limits are currently fixed to `[1 100]` Hz.
+- Frequency limits are controlled by `PowerFreqRange`, `PowerFreqStep`, or `PowerFoi`.
 
 **Signature**
 
@@ -401,7 +408,8 @@ power = rest.compute_power(data, params);
 
 **What it does**
 
-- Computes alpha peak frequency on the channel-averaged PSD.
+- Computes peak frequency on the channel-averaged PSD within `params.PeakBand`.
+- Defaults to alpha when `params.FreqBand.alpha` exists.
 - Two estimates:
   - `localmax`: highest local maximum within alpha range
   - `cog`: center-of-gravity within alpha range
@@ -420,6 +428,28 @@ pf = rest.compute_peakfrequency(power, params);
 **Output**
 
 - `pf.localmax`, `pf.cog`
+- `pf.band`, `pf.range_hz`, `pf.peak_found`
+
+### 4.5b `rest.compute_bandpower`
+
+**What it does**
+
+- Computes absolute and relative sensor-space band power for every band in `params.FreqBand`.
+- Stores per-channel vectors plus mean summaries suitable for CSV export.
+
+**Signature**
+
+```matlab
+bp = rest.compute_bandpower(power, params);
+```
+
+**Output**
+
+For each band, e.g. `bp.alpha`:
+
+- `range_hz`
+- `absolute` and `relative` per-channel vectors
+- `absolute_mean` and `relative_mean`
 
 ---
 
@@ -699,6 +729,8 @@ All plots accept a `res` struct (from `compute_all_features` output).
 
 - Load one or more `<sub>_rest_features.mat` files and export a "wide" feature table to CSV.
 - Exports:
+  - sensor band-power summaries (`*_power_abs_mean`, `*_power_rel_mean`)
+  - aperiodic summaries (`aperiodic_exponent_mean`, `aperiodic_offset_mean`, `aperiodic_r2_mean`)
   - dwPLI and AEC global (net) measures (if present)
   - dwPLI and AEC nodal measures (if present)
   - alpha peak frequency fields

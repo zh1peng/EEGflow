@@ -29,8 +29,12 @@
         "OutputBaseName": "",
         "SaveMat": true,
         "KeepInState": true,
+        "MinTrials": 10,
         "nTrial_treshold": 10,
+        "PowerFreqRange": [1, 100],
+        "PowerFreqStep": 0.1,
         "FreqRes": 0.1,
+        "PeakBand": "alpha",
         "Pad": null,
         "Taper": "dpss",
         "Tapsmofrq": 1,
@@ -72,4 +76,3 @@
     "validate_only": false
   }
 }
-

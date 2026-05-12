@@ -1,6 +1,6 @@
 function features2csv_parallel(matFileList, outputCSV)
-    % features2csv_parallel processes a list of .mat files 
-    % containing the 'res' structure in parallel and exports connectivity and 
+    % features2csv_parallel processes a list of .mat files
+    % containing the 'res' structure in parallel and exports connectivity and
     % peak frequency features to a CSV file.
     %
     % USAGE:
@@ -27,7 +27,7 @@ function features2csv_parallel(matFileList, outputCSV)
     %   alphapeak_localmax, alphapeak_cog
     %
     % The final CSV file will have one row per subject and one column per feature.
-    
+
     poolobj = gcp('nocreate');
     if isempty(poolobj)
         parpool();
@@ -38,10 +38,10 @@ function features2csv_parallel(matFileList, outputCSV)
         'aCpratio', 'aLpratio', 'alocEratio', 'agEratio', 'adegratio', 'abwratio', 'amodratio'};
     nodeMeasures = {'aCp', 'aLp', 'alocE', 'agE', 'adeg', 'abw', ...
         'aCpratio', 'aLpratio', 'alocEratio', 'agEratio', 'adegratio', 'abwratio'};
-    
+
     nFiles = length(matFileList);
     subjTableCell = cell(nFiles, 1);  % Preallocate cell array to store each subject's table row
-    
+
     % Process each file in parallel
     parfor iFile = 1:nFiles
         curFile = matFileList{iFile};
@@ -53,31 +53,31 @@ function features2csv_parallel(matFileList, outputCSV)
             subjTableCell{iFile} = [];  % Skip file on error
             continue;
         end
-        
+
         if ~isfield(S, 'res')
             warning('File %s does not contain variable res. Skipping.', curFile);
             subjTableCell{iFile} = [];
             continue;
         end
         res = S.res;
-        
+
         % Initialize a structure to hold features for the current subject.
         subjFeat = struct();
-        
+
         % Subject ID extraction (assumed to be stored in res.subid)
         if isfield(res, 'subid')
             subjFeat.subid = res.subid;
         else
             subjFeat.subid = 'unknown';
         end
-    
+
         % Save number of trials if available
         if isfield(res, 'nTrial')
             subjFeat.nTrial = res.nTrial;
         else
             subjFeat.nTrial = -999;
         end
-        
+
         % Determine frequency bands from res.params.FreqBand (e.g., 'alpha', 'beta', etc.)
         if isfield(res, 'params') && isfield(res.params, 'FreqBand')
             freqBands = fields(res.params.FreqBand);
@@ -86,11 +86,26 @@ function features2csv_parallel(matFileList, outputCSV)
             subjTableCell{iFile} = [];
             continue;
         end
-        
+
         % Process each frequency band
         for iBand = 1:length(freqBands)
             band = freqBands{iBand};
-            
+
+            % --- Sensor band-power summaries ---
+            if isfield(res, 'bandpower') && isfield(res.bandpower, band)
+                bp = res.bandpower.(band);
+                if isfield(bp, 'absolute_mean')
+                    subjFeat.(sprintf('%s_power_abs_mean', band)) = bp.absolute_mean;
+                end
+                if isfield(bp, 'relative_mean')
+                    subjFeat.(sprintf('%s_power_rel_mean', band)) = bp.relative_mean;
+                end
+            end
+
+            if ~isfield(res, band)
+                continue;
+            end
+
             % --- Process dwPLI Global (net) Measures ---
             if isfield(res.(band), 'dwpli_net_sum')
                 for m = 1:length(netMeasures)
@@ -103,7 +118,7 @@ function features2csv_parallel(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process dwPLI Nodal Measures ---
             if isfield(res.(band), 'dwpli_node_sum')
                 for m = 1:length(nodeMeasures)
@@ -118,7 +133,7 @@ function features2csv_parallel(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process AEC Global (net) Measures ---
             if isfield(res.(band), 'aec_net_sum')
                 for m = 1:length(netMeasures)
@@ -131,7 +146,7 @@ function features2csv_parallel(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process AEC Nodal Measures ---
             if isfield(res.(band), 'aec_node_sum')
                 for m = 1:length(nodeMeasures)
@@ -147,7 +162,20 @@ function features2csv_parallel(matFileList, outputCSV)
                 end
             end
         end
-        
+
+        % --- Extract aperiodic summaries ---
+        if isfield(res, 'aperiodic') && isstruct(res.aperiodic)
+            if isfield(res.aperiodic, 'exponent_mean')
+                subjFeat.aperiodic_exponent_mean = res.aperiodic.exponent_mean;
+            end
+            if isfield(res.aperiodic, 'offset_mean')
+                subjFeat.aperiodic_offset_mean = res.aperiodic.offset_mean;
+            end
+            if isfield(res.aperiodic, 'r2_mean')
+                subjFeat.aperiodic_r2_mean = res.aperiodic.r2_mean;
+            end
+        end
+
         % --- Extract Peak Frequency Information ---
         if isfield(res, 'peakfrequency')
             if isfield(res.peakfrequency, 'localmax') && ~isempty(res.peakfrequency.localmax)
@@ -161,12 +189,12 @@ function features2csv_parallel(matFileList, outputCSV)
                 subjFeat.alphapeak_cog = NaN;
             end
         end
-        
+
         % Convert subject's feature structure to a table row.
         localTable = struct2table(subjFeat);
         subjTableCell{iFile} = localTable;
     end
-    
+
     % Concatenate all valid table rows
     validRows = ~cellfun(@isempty, subjTableCell);
     if any(validRows)
@@ -174,9 +202,9 @@ function features2csv_parallel(matFileList, outputCSV)
     else
         result_T = table();
     end
-    
+
     % Write the final table to the specified CSV file.
     writetable(result_T, outputCSV);
     fprintf('CSV file saved: %s\n', outputCSV);
     end
-    
+

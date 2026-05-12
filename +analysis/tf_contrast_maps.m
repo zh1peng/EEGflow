@@ -47,7 +47,7 @@ function state = tf_contrast_maps(state, args, ~)
 
     maps = Xp - Xn; % [chan x f x t x subj]
 
-    [freqs, times] = resolve_tf_axes(state, subs, condP);
+    [freqs, times] = state_get_tf_axes(state, subs, condP);
 
     state.Results.Contrasts.(name).maps = maps;
     state.Results.Contrasts.(name).tfd = mean(maps, 4);
@@ -60,31 +60,4 @@ function state = tf_contrast_maps(state, args, ~)
     state.Results.Contrasts.(name).times = times;
 
     fprintf('Subject-level contrast "%s" built (%s: %s-%s).\n', name, group, condP, condN);
-end
-
-function [freqs, times] = resolve_tf_axes(state, subjects, condition)
-    freqs = [];
-    times = [];
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(state.Results, 'TF')
-        for i = 1:numel(subjects)
-            sfield = state_subject_field(state, subjects{i});
-            if isfield(state.Results.TF, sfield) && isfield(state.Results.TF.(sfield), condition)
-                entry = state.Results.TF.(sfield).(condition);
-                if isfield(entry, 'freqs'), freqs = entry.freqs; end
-                if isfield(entry, 'times'), times = entry.times; end
-                break;
-            end
-        end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found in Dataset.meta or Results.TF.');
-    end
 end

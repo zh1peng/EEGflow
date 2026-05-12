@@ -26,15 +26,15 @@ function features2csv(matFileList, outputCSV)
     %   alphapeak_localmax, alphapeak_cog
     %
     % The final CSV file will have one row per subject and one column per feature.
-    
+
     % Define measure lists for net and nodal features.
     netMeasures = {'aCp', 'aLp', 'alocE', 'agE', 'adeg', 'abw', 'amod', ...
         'aCpratio', 'aLpratio', 'alocEratio', 'agEratio', 'adegratio', 'abwratio', 'amodratio'};
     nodeMeasures = {'aCp', 'aLp', 'alocE', 'agE', 'adeg', 'abw', ...
         'aCpratio', 'aLpratio', 'alocEratio', 'agEratio', 'adegratio', 'abwratio'};
-    
+
     result_T = table();  % Initialize overall results table
-    
+
     for iFile = 1:length(matFileList)
         curFile = matFileList{iFile};
         try
@@ -48,10 +48,10 @@ function features2csv(matFileList, outputCSV)
             continue;
         end
         res = S.res;
-        
+
         % Initialize a structure to hold features for the current subject.
         subjFeat = struct();
-        
+
         % Subject ID extraction (assumed to be stored in res.subid)
         if isfield(res, 'subid')
             subjFeat.subid = res.subid;
@@ -65,7 +65,7 @@ function features2csv(matFileList, outputCSV)
         else
             subjFeat.nTrial = -999;
         end
-        
+
         % Determine frequency bands from res.params.FreqBand (e.g., 'alpha', 'beta', etc.)
         if isfield(res, 'params') && isfield(res.params, 'FreqBand')
             freqBands = fields(res.params.FreqBand);
@@ -73,11 +73,26 @@ function features2csv(matFileList, outputCSV)
             warning('File %s missing params.FreqBand. Skipping.', curFile);
             continue;
         end
-        
+
         % Process each frequency band
         for iBand = 1:length(freqBands)
             band = freqBands{iBand};
-            
+
+            % --- Sensor band-power summaries ---
+            if isfield(res, 'bandpower') && isfield(res.bandpower, band)
+                bp = res.bandpower.(band);
+                if isfield(bp, 'absolute_mean')
+                    subjFeat.(sprintf('%s_power_abs_mean', band)) = bp.absolute_mean;
+                end
+                if isfield(bp, 'relative_mean')
+                    subjFeat.(sprintf('%s_power_rel_mean', band)) = bp.relative_mean;
+                end
+            end
+
+            if ~isfield(res, band)
+                continue;
+            end
+
             % --- Process dwPLI Global (net) Measures ---
             if isfield(res.(band), 'dwpli_net_sum')
                 for m = 1:length(netMeasures)
@@ -90,7 +105,7 @@ function features2csv(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process dwPLI Nodal Measures ---
             if isfield(res.(band), 'dwpli_node_sum')
                 for m = 1:length(nodeMeasures)
@@ -105,7 +120,7 @@ function features2csv(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process AEC Global (net) Measures ---
             if isfield(res.(band), 'aec_net_sum')
                 for m = 1:length(netMeasures)
@@ -118,7 +133,7 @@ function features2csv(matFileList, outputCSV)
                     end
                 end
             end
-            
+
             % --- Process AEC Nodal Measures ---
             if isfield(res.(band), 'aec_node_sum')
                 for m = 1:length(nodeMeasures)
@@ -134,7 +149,20 @@ function features2csv(matFileList, outputCSV)
                 end
             end
         end
-        
+
+        % --- Extract aperiodic summaries ---
+        if isfield(res, 'aperiodic') && isstruct(res.aperiodic)
+            if isfield(res.aperiodic, 'exponent_mean')
+                subjFeat.aperiodic_exponent_mean = res.aperiodic.exponent_mean;
+            end
+            if isfield(res.aperiodic, 'offset_mean')
+                subjFeat.aperiodic_offset_mean = res.aperiodic.offset_mean;
+            end
+            if isfield(res.aperiodic, 'r2_mean')
+                subjFeat.aperiodic_r2_mean = res.aperiodic.r2_mean;
+            end
+        end
+
         % --- Extract Peak Frequency Information ---
         if isfield(res, 'peakfrequency')
             if isfield(res.peakfrequency, 'localmax') && ~isempty(res.peakfrequency.localmax)
@@ -148,14 +176,14 @@ function features2csv(matFileList, outputCSV)
                 subjFeat.alphapeak_cog = NaN;
             end
         end
-        
+
         % Convert subject's feature structure to a table row and append to the overall table.
         Trow = struct2table(subjFeat);
         result_T = [result_T; Trow];  % Vertical concatenation
     end
-    
+
     % Write the final table to the specified CSV file.
     writetable(result_T, outputCSV);
     fprintf('CSV file saved: %s\n', outputCSV);
     end
-    
+

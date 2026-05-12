@@ -20,7 +20,7 @@ function [state, T] = tf_extract_features(state, args, ~)
     twin = state.Selection.TimeWindows.(args.window);
     gnames = fieldnames(state.Selection.Groups);
     subs0 = state.Selection.Groups.(gnames{1});
-    [freqs, times] = resolve_tf_axes(state, subs0, state.Selection.Conditions{1});
+    [freqs, times] = state_get_tf_axes(state, subs0, state.Selection.Conditions{1});
 
     fmask = freqs >= fband(1) & freqs <= fband(2);
     tmask = times >= twin(1) & times <= twin(2);
@@ -85,32 +85,5 @@ function feats = compute_feats(y, t_ms, ~, metrics)
     end
     if any(strcmpi(metrics, 'auc'))
         feats.auc = trapz(t_ms, y);
-    end
-end
-
-function [freqs, times] = resolve_tf_axes(state, subjects, condition)
-    freqs = [];
-    times = [];
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(state.Results, 'TF')
-        for i = 1:numel(subjects)
-            sfield = state_subject_field(state, subjects{i});
-            if isfield(state.Results.TF, sfield) && isfield(state.Results.TF.(sfield), condition)
-                entry = state.Results.TF.(sfield).(condition);
-                if isfield(entry, 'freqs'), freqs = entry.freqs; end
-                if isfield(entry, 'times'), times = entry.times; end
-                break;
-            end
-        end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found in Dataset.meta or Results.TF.');
     end
 end

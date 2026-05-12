@@ -30,7 +30,11 @@ function state = tf_plot_topo(state, args, meta)
 
     fband = state.Selection.FreqBands.(args.band);
     twin = state.Selection.TimeWindows.(args.window);
-    [freqs, times] = resolve_tf_axes(state, args);
+    axis_contrast = struct();
+    if isfield(args, 'contrast') && ~isempty(args.contrast)
+        axis_contrast = state.Results.Contrasts.(args.contrast);
+    end
+    [freqs, times] = state_get_tf_axes(state, {}, '', axis_contrast);
     fmask = freqs >= fband(1) & freqs <= fband(2);
     tmask = times >= twin(1) & times <= twin(2);
 
@@ -62,25 +66,5 @@ function state = tf_plot_topo(state, args, meta)
     cb = colorbar;
     if isprop(cb, 'TickLabelInterpreter')
         set(cb, 'TickLabelInterpreter', 'none');
-    end
-end
-
-function [freqs, times] = resolve_tf_axes(state, args)
-    freqs = []; times = [];
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(args, 'contrast') && ~isempty(args.contrast)
-        C = state.Results.Contrasts.(args.contrast);
-        if isfield(C, 'freqs'), freqs = C.freqs; end
-        if isfield(C, 'times'), times = C.times; end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found.');
     end
 end

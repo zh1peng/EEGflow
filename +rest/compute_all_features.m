@@ -66,9 +66,14 @@ function state = compute_all_features(state, args, meta)
 
     % legacy-compatible field name (typo preserved)
     p.addParameter('nTrial_treshold', 10, @(x) isnumeric(x) && isscalar(x) && x >= 0);
+    p.addParameter('MinTrials', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x >= 0));
 
     % spectral / connectivity params (legacy names)
     p.addParameter('FreqRes', 0.1, @(x) isnumeric(x) && isscalar(x) && x > 0);
+    p.addParameter('PowerFreqStep', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
+    p.addParameter('PowerFreqRange', [1 100], @(x) isnumeric(x) && numel(x) == 2 && all(isfinite(x)) && x(2) > x(1));
+    p.addParameter('PowerFoi', [], @(x) isempty(x) || (isnumeric(x) && isvector(x) && all(isfinite(x))));
+    p.addParameter('PeakBand', 'alpha', @(s) ischar(s) || isstring(s));
     p.addParameter('Pad', [], @(x) isempty(x) || ischar(x) || isstring(x) || (isnumeric(x) && isscalar(x) && x > 0));
     p.addParameter('Taper', 'dpss', @(s) ischar(s) || isstring(s));
     p.addParameter('Tapsmofrq', 1, @(x) isnumeric(x) && isscalar(x) && x > 0);
@@ -116,7 +121,7 @@ function state = compute_all_features(state, args, meta)
 
     state_require_eeg(state, op);
     p.parse(state.EEG, nv{:});
-    R = p.Results;
+    R = rest.normalize_params(p.Results);
 
     if ~isfield(R, 'FreqBand') || ~isstruct(R.FreqBand) || isempty(fieldnames(R.FreqBand))
         error('rest:compute_all_features:MissingFreqBand', ...
@@ -178,8 +183,8 @@ function state = compute_all_features(state, args, meta)
 
     nTrial = numel(data.trial);
     out.nTrial = nTrial;
-    if nTrial < R.nTrial_treshold
-        msg = sprintf('[rest.compute_all_features] Skipping: nTrial=%d < threshold=%d', nTrial, R.nTrial_treshold);
+    if nTrial < R.MinTrials
+        msg = sprintf('[rest.compute_all_features] Skipping: nTrial=%d < threshold=%d', nTrial, R.MinTrials);
         log_step(state, meta, R.LogFile, msg);
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
@@ -190,6 +195,7 @@ function state = compute_all_features(state, args, meta)
     try
         log_step(state, meta, R.LogFile, '[rest.compute_all_features] Computing sensor power + peak frequency...');
         res.power = rest.compute_power(data, R);
+        res.bandpower = rest.compute_bandpower(res.power, R);
         res.peakfrequency = rest.compute_peakfrequency(res.power, R);
 
         if isfield(R, 'RemoveAperiodic') && R.RemoveAperiodic

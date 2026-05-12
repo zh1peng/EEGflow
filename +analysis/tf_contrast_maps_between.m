@@ -63,7 +63,7 @@ function state = tf_contrast_maps_between(state, args, ~)
         error('No data found for contrast terms.');
     end
 
-    [freqs, times] = resolve_tf_axes(state, subs_pos, pos{2});
+    [freqs, times] = state_get_tf_axes(state, subs_pos, pos{2});
 
     state.Results.Contrasts.(name).pos_maps = maps_pos;
     state.Results.Contrasts.(name).neg_maps = maps_neg;
@@ -84,31 +84,4 @@ function state = tf_contrast_maps_between(state, args, ~)
     state.Results.Contrasts.(name).desc = sprintf('%s(%s) - %s(%s)', gpos, pos_desc, gneg, neg_desc);
 
     fprintf('Between-group contrast "%s" built: %s.\n', name, state.Results.Contrasts.(name).desc);
-end
-
-function [freqs, times] = resolve_tf_axes(state, subjects, condition)
-    freqs = [];
-    times = [];
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(state.Results, 'TF')
-        for i = 1:numel(subjects)
-            sfield = state_subject_field(state, subjects{i});
-            if isfield(state.Results.TF, sfield) && isfield(state.Results.TF.(sfield), condition)
-                entry = state.Results.TF.(sfield).(condition);
-                if isfield(entry, 'freqs'), freqs = entry.freqs; end
-                if isfield(entry, 'times'), times = entry.times; end
-                break;
-            end
-        end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found in Dataset.meta or Results.TF.');
-    end
 end

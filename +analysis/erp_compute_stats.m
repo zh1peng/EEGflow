@@ -7,8 +7,10 @@ function state = erp_compute_stats(state, args, ~)
     if ~isfield(args, 'mcc'), args.mcc = 'none'; end
     if ~isfield(args, 'time_window'), args.time_window = []; end
     if ~isfield(args, 'roi'), args.roi = ''; end
-    if ~(strcmpi(args.mcc, 'none') || strcmpi(args.mcc, 'fdr'))
-        error('mcc must be "none" or "fdr".');
+    if ~isfield(args, 'n_perm'), args.n_perm = 1000; end
+    if ~isfield(args, 'tail'), args.tail = 'two'; end
+    if ~(strcmpi(args.mcc, 'none') || strcmpi(args.mcc, 'fdr') || strcmpi(args.mcc, 'cluster'))
+        error('mcc must be "none", "fdr", or "cluster".');
     end
 
     if ~exist('ttest', 'file')
@@ -39,15 +41,13 @@ function state = erp_compute_stats(state, args, ~)
         error('No ERP data found for contrast terms.');
     end
 
-    data_dim = 3;
     if ~isempty(args.roi)
         if ~isfield(state.Selection, 'ROIs') || ~isfield(state.Selection.ROIs, args.roi)
             error('ROI "%s" not found. Define it first.', args.roi);
         end
         [chan_idx, ~] = state_get_indices(state, args.roi);
-        pos_data = squeeze(mean(pos_data(chan_idx, :, :), 1));
-        neg_data = squeeze(mean(neg_data(chan_idx, :, :), 1));
-        data_dim = 2;
+        pos_data = mean(pos_data(chan_idx, :, :), 1);
+        neg_data = mean(neg_data(chan_idx, :, :), 1);
         fprintf('Computing stats on ROI "%s" (%d channels).\n', args.roi, numel(chan_idx));
     end
 
@@ -60,77 +60,27 @@ function state = erp_compute_stats(state, args, ~)
         if numel(common_subs) < 2
             error('Paired stats require at least 2 common subjects. Found %d.', numel(common_subs));
         end
-        if data_dim == 3
-            pos_paired = pos_data(:, :, ia);
-            neg_paired = neg_data(:, :, ib);
-        else
-            pos_paired = pos_data(:, ia);
-            neg_paired = neg_data(:, ib);
-        end
-        diff_data = pos_paired - neg_paired;
-        [~, p, ~, stats] = ttest(diff_data, 0, 'dim', data_dim);
-        t = stats.tstat;
+        X1 = pos_data(:, :, ia) - neg_data(:, :, ib);
+        X2 = [];
+        design = 'onesample';
+        subjects_included = common_subs;
     else
-        if size(pos_data, data_dim) < 2 || size(neg_data, data_dim) < 2
+        if size(pos_data, 3) < 2 || size(neg_data, 3) < 2
             warning('Unpaired stats are being computed with <2 subjects in at least one term.');
         end
-        [~, p, ~, stats] = ttest2(pos_data, neg_data, 'dim', data_dim);
-        t = stats.tstat;
-    end
-    if data_dim == 2
-        p = reshape(p, 1, []);
-        t = reshape(t, 1, []);
+        X1 = pos_data;
+        X2 = neg_data;
+        design = 'two-sample';
+        subjects_included = unique([pos_found, neg_found], 'stable');
     end
 
-    time_indices = 1:size(state.Dataset.times, 2);
-    if ~isempty(args.time_window)
-        if ~isnumeric(args.time_window) || numel(args.time_window) ~= 2 || args.time_window(1) >= args.time_window(2)
-            error('time_window must be [start end] in ms.');
-        end
-        time_indices = state.Dataset.times >= args.time_window(1) & state.Dataset.times <= args.time_window(2);
-        if ~any(time_indices)
-            error('time_window [%g %g] ms does not overlap dataset time range [%g %g] ms.', ...
-                args.time_window(1), args.time_window(2), state.Dataset.times(1), state.Dataset.times(end));
-        end
-        if data_dim == 3
-            p = p(:, time_indices);
-            t = t(:, time_indices);
-        else
-            p = p(time_indices);
-            t = t(time_indices);
-        end
-    end
+    S = erp_waveform_stats(X1, X2, design, state.Dataset.times, args);
 
-    p_corrected = nan(size(p));
-    if strcmpi(args.mcc, 'fdr')
-        if ~exist('mafdr', 'file')
-            error('FDR correction requires mafdr (Statistics and Machine Learning Toolbox).');
-        end
-        p_vector = p(:);
-        nan_mask = isnan(p_vector);
-        p_vector_nonan = p_vector(~nan_mask);
-        if ~isempty(p_vector_nonan)
-            p_corr_vec = mafdr(p_vector_nonan, 'BHFDR', true);
-            p_corr = nan(size(p_vector));
-            p_corr(~nan_mask) = p_corr_vec;
-            p_corrected = reshape(p_corr, size(p));
-        else
-            warning('All p-values were NaN; FDR correction not applied.');
-            p_corrected = p;
-        end
-    else
-        p_corrected = p;
-    end
-    h = p_corrected < args.alpha;
-
-    tvec = state.Dataset.times(time_indices);
-    sig_segments = cell(size(h, 1), 1);
     any_found = false;
-    for ch = 1:size(h, 1)
-        segments = state_get_sig_windows(h(ch, :), tvec);
+    for ch = 1:size(S.h, 1)
+        segments = S.sig_segments{ch};
         if ~isempty(segments)
             any_found = true;
-            sig_segments{ch} = segments;
             if isempty(args.roi)
                 fprintf('Ch %s: %d significant segment(s).\n', state.Dataset.chanlocs(ch).labels, size(segments, 1));
             else
@@ -142,30 +92,12 @@ function state = erp_compute_stats(state, args, ~)
         fprintf('No significant segments found.\n');
     end
 
-    if ~isempty(args.roi)
-        num_chans = 1;
-    else
-        num_chans = numel(state.Dataset.chanlocs);
-    end
-    full_p = nan(num_chans, numel(state.Dataset.times));
-    full_t = nan(num_chans, numel(state.Dataset.times));
-    full_h = false(num_chans, numel(state.Dataset.times));
-    full_p_corrected = nan(num_chans, numel(state.Dataset.times));
-    full_p(:, time_indices) = p;
-    full_t(:, time_indices) = t;
-    full_h(:, time_indices) = h;
-    full_p_corrected(:, time_indices) = p_corrected;
-
-    state.Results.Contrasts.(cname).Stats.p = full_p;
-    state.Results.Contrasts.(cname).Stats.p_corrected = full_p_corrected;
-    state.Results.Contrasts.(cname).Stats.t = full_t;
-    state.Results.Contrasts.(cname).Stats.h = full_h;
-    state.Results.Contrasts.(cname).Stats.sig_segments = sig_segments;
-    state.Results.Contrasts.(cname).Stats.sig_clusters = sig_segments; % backward compatibility
-    state.Results.Contrasts.(cname).Stats.alpha = args.alpha;
-    state.Results.Contrasts.(cname).Stats.mcc = args.mcc;
-    state.Results.Contrasts.(cname).Stats.is_paired = is_paired;
-    state.Results.Contrasts.(cname).Stats.time_window = args.time_window;
-    state.Results.Contrasts.(cname).Stats.roi = args.roi;
-    fprintf('Done. Found %d significant points.\n', sum(h(:)));
+    S.is_paired = is_paired;
+    S.roi = args.roi;
+    S.subjects_positive = pos_found;
+    S.subjects_negative = neg_found;
+    S.subjects_included = subjects_included;
+    S.subjects_excluded = setdiff(unique([pos_found, neg_found], 'stable'), subjects_included, 'stable');
+    state.Results.Contrasts.(cname).Stats = S;
+    fprintf('Done. Found %d significant points.\n', sum(S.h(:)));
 end

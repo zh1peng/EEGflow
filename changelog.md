@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.0 - 2026-05-12
+
+- Added ERP waveform cluster permutation correction via `mcc='cluster'` for:
+  - `analysis.erp_compute_stats`
+  - `analysis.erp_compute_subject_contrast_stats`
+- Added shared private ERP waveform stats backend for point-wise, FDR, and cluster-corrected tests.
+- Added stats reproducibility fields for subject inclusion/exclusion reporting.
+- Added MATLAB regression coverage for ERP cluster stats.
+- Bumped analysis module version to `0.7.0`.
+
 ## v0.6.0 - 2026-03-20
 
 - Removed the redundant `analysis.plot_erp` alias and made `analysis.erp_plot_erp` the single canonical GA ERP plotting entry point.

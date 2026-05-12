@@ -23,7 +23,7 @@ function state = tf_compute_ga(state, args, ~)
                 continue;
             end
 
-            [freqs, times] = resolve_tf_axes(state, subs, cn);
+            [freqs, times] = state_get_tf_axes(state, subs, cn);
 
             state.Results.GA_TFD.(gn).(cn).tfd = mean(stack, 4);
             state.Results.GA_TFD.(gn).(cn).n = n;
@@ -31,32 +31,5 @@ function state = tf_compute_ga(state, args, ~)
             state.Results.GA_TFD.(gn).(cn).freqs = freqs;
             state.Results.GA_TFD.(gn).(cn).times = times;
         end
-    end
-end
-
-function [freqs, times] = resolve_tf_axes(state, subjects, condition)
-    freqs = [];
-    times = [];
-    if isfield(state.Dataset.data, 'meta')
-        meta = state.Dataset.data.meta;
-        if isfield(meta, 'freqs'), freqs = meta.freqs; end
-        if isfield(meta, 'times'), times = meta.times; end
-    end
-    if ~isempty(freqs) && ~isempty(times)
-        return;
-    end
-    if isfield(state, 'Results') && isfield(state.Results, 'TF')
-        for i = 1:numel(subjects)
-            sfield = state_subject_field(state, subjects{i});
-            if isfield(state.Results.TF, sfield) && isfield(state.Results.TF.(sfield), condition)
-                entry = state.Results.TF.(sfield).(condition);
-                if isfield(entry, 'freqs'), freqs = entry.freqs; end
-                if isfield(entry, 'times'), times = entry.times; end
-                break;
-            end
-        end
-    end
-    if isempty(freqs) || isempty(times)
-        error('TF axes (freqs/times) not found in Dataset.meta or Results.TF.');
     end
 end

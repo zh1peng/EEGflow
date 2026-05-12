@@ -321,6 +321,12 @@ For inference, prefer:
 
 because they preserve per-subject variability and enable proper stats.
 
+`analysis.tf_band_stats` now uses the stored subject-level contrast maps directly.
+That means ROI/band/window statistics preserve the contrast's metric (for example
+`power` vs `induced_power`) and design (`within`, `between`, or `diff_in_diff`).
+Build contrasts with `analysis.tf_contrast_maps` or
+`analysis.tf_contrast_maps_between` before running band-level statistics.
+
 ---
 
 ## 6) Common Pitfalls and Fixes
