@@ -329,7 +329,7 @@ Spectral params (sensor PSD):
 - `PeakBand` (default `'alpha'` when available): band used by `compute_peakfrequency`
 - `FreqRes` (default `0.1`): legacy alias for `PowerFreqStep`
 - `Pad` (default `[]`): passed to `ft_freqanalysis` when non-empty
-- `Taper` (default `'dpss'`)
+- `Taper` (default `'dpss'`): requires Signal Processing Toolbox for `dpss`; use `'hanning'` if unavailable
 - `Tapsmofrq` (default `1`)
 - `FreqBand` (**required**): a struct, e.g. `struct('alpha',[8 12])`
 
@@ -351,6 +351,7 @@ Connectivity and graph:
 - `ComputeDwpli` (default `true`)
 - `ComputeAec` (default `true`)
 - `FreqResConnectivity` (default `0.5`)
+- `FailOnBandError` (default `true`): fail the pipeline if a requested per-band source/connectivity output cannot be computed
 - `ComputeGraph` (default `true`, but skipped if GRETNA not found)
 - `GRETNA_s1` (default `0.05`)
 - `GRETNA_s2` (default `0.3`)

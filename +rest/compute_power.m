@@ -4,6 +4,7 @@ function [power]=compute_power(data, params)
         params = struct();
     end
     params = rest.normalize_params(params);
+    require_taper_dependency(params.Taper, 'rest.compute_power');
 
     % Average power spectrum across epochs.
     cfg = [];

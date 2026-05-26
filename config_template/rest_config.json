@@ -58,6 +58,7 @@
         "ComputeDwpli": true,
         "ComputeAec": true,
         "FreqResConnectivity": 0.5,
+        "FailOnBandError": true,
         "ComputeGraph": true,
         "KeepSource": false,
         "ComputeSourcePower": true,

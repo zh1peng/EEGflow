@@ -1,6 +1,17 @@
 function [connMatrix]=compute_dwpli(data, source,params, freqBand)
-    % Load EEG data and check that there are more than 10 epochs
-    assert(size(data.trial,2)>=10, 'Recording with less than 10 epochs');
+    if nargin < 3 || isempty(params)
+        params = struct();
+    end
+    params = rest.normalize_params(params);
+    require_taper_dependency(params.Taper, 'rest.compute_dwpli');
+
+    if ~isfield(params, 'FreqBand') || ~isstruct(params.FreqBand) || ~isfield(params.FreqBand, freqBand)
+        error('rest:compute_dwpli:MissingFreqBand', 'params.FreqBand.%s is required.', char(string(freqBand)));
+    end
+    if size(data.trial, 2) < params.MinTrials
+        error('rest:compute_dwpli:TooFewTrials', ...
+            'Recording has %d epochs, below MinTrials=%d.', size(data.trial, 2), params.MinTrials);
+    end
     
     % Band-pass filter the data in the relevant frequency band
     cfg = [];
@@ -21,12 +32,12 @@ function [connMatrix]=compute_dwpli(data, source,params, freqBand)
     % Fourier components
     cfg = [];
     cfg.method = 'mtmfft';
-    cfg.taper = 'dpss';
+    cfg.taper = params.Taper;
     cfg.output = 'fourier';
     cfg.keeptrials = 'yes';
     cfg.pad = 'nextpow2';
     cfg.foi = fois;
-    cfg.tapsmofrq = 1;
+    cfg.tapsmofrq = params.Tapsmofrq;
     virtFreq = ft_freqanalysis(cfg, virtChan_data);
     clear virtChan_data;
     

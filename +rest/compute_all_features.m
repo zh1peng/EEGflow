@@ -27,6 +27,9 @@ function state = compute_all_features(state, args, meta)
 %   - ComputeDwpli (logical)           default true
 %   - ComputeAec (logical)             default true
 %   - ComputeGraph (logical)           default true (skipped if GRETNA not available)
+%   - FailOnBandError (logical)        default true
+%       If true, requested per-band source/connectivity failures stop the
+%       pipeline instead of saving incomplete feature files.
 %   - KeepSource (logical)             default false (source structs can be very large)
 %   - ComputeSourcePower (logical)     default true
 %       If true, store a per-ROI source power estimate (inside nodes) for
@@ -99,6 +102,7 @@ function state = compute_all_features(state, args, meta)
     p.addParameter('ComputeDwpli', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('ComputeAec', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('ComputeGraph', true, @(x) islogical(x) && isscalar(x));
+    p.addParameter('FailOnBandError', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('KeepSource', false, @(x) islogical(x) && isscalar(x));
     p.addParameter('ComputeSourcePower', true, @(x) islogical(x) && isscalar(x));
 
@@ -132,9 +136,13 @@ function state = compute_all_features(state, args, meta)
         deps = struct();
         deps.has_fieldtrip = exist('ft_freqanalysis', 'file') && exist('ft_preprocessing', 'file');
         deps.has_gretna = exist('gretna_sw_batch_networkanalysis_weight', 'file');
+        deps.has_dpss = exist('dpss', 'file') == 2;
 
         if ~deps.has_fieldtrip
             warning('FieldTrip not found on path; rest.compute_all_features will fail at runtime until FieldTrip is added.');
+        end
+        if strcmpi(char(string(R.Taper)), 'dpss') && ~deps.has_dpss
+            warning('Signal Processing Toolbox function dpss() not found; Taper=''dpss'' will fail.');
         end
         if R.ComputeGraph && ~deps.has_gretna
             warning('GRETNA not found on path; graph measures will be skipped at runtime.');
@@ -146,6 +154,7 @@ function state = compute_all_features(state, args, meta)
 
     local_maybe_add_deps(R);
     local_require_fieldtrip(R);
+    require_taper_dependency(R.Taper, 'rest.compute_all_features');
 
     EEG = state.EEG;
     out = struct();
@@ -222,6 +231,10 @@ function state = compute_all_features(state, args, meta)
                 atlas = rest.atlas_load(atlasPath, 'NetworkOrder', R.AtlasNetworkOrder);
             catch ME
                 log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING could not load atlas: %s', ME.message));
+                if R.FailOnBandError
+                    logPrint(errorLog, sprintf('Atlas load error: %s', ME.message));
+                    error(ME.identifier, '%s', ME.message);
+                end
             end
         end
 
@@ -256,6 +269,10 @@ function state = compute_all_features(state, args, meta)
                         res.(bandName).parcellation = parc;
                     catch ME
                         log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING parcellation failed (%s): %s', bandName, ME.message));
+                        if R.FailOnBandError && ~isempty(atlasPath)
+                            logPrint(errorLog, sprintf('Parcellation error (%s): %s', bandName, ME.message));
+                            error(ME.identifier, '%s', ME.message);
+                        end
                     end
                 end
 
@@ -271,6 +288,10 @@ function state = compute_all_features(state, args, meta)
                         end
                     catch ME
                         log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING source power failed (%s): %s', bandName, ME.message));
+                        if R.FailOnBandError
+                            logPrint(errorLog, sprintf('Source power error (%s): %s', bandName, ME.message));
+                            error(ME.identifier, '%s', ME.message);
+                        end
                     end
                 end
 
@@ -302,6 +323,9 @@ function state = compute_all_features(state, args, meta)
             catch ME
                 log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] WARNING band=%s failed: %s', bandName, ME.message));
                 logPrint(errorLog, sprintf('Band %s error: %s', bandName, ME.message));
+                if R.FailOnBandError
+                    error(ME.identifier, '%s', ME.message);
+                end
                 continue;
             end
         end
