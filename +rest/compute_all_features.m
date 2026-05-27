@@ -23,6 +23,9 @@ function state = compute_all_features(state, args, meta)
 %   - HeadModelPath / HeadModel        required when ComputeSource=true
 %   - AtlasPath or SourcePos           required when ComputeSource=true
 %   - TemplateElecFile / Elec          recommended when ComputeSource=true
+%   - UseCheckedHeadmodel (logical)    default true
+%       If rest.check_headmodel ran earlier in the pipeline, reuse its
+%       checked/aligned HeadModel and Elec unless this is false.
 %   - ComputeSource (logical)          default true
 %   - ComputeDwpli (logical)           default true
 %   - ComputeAec (logical)             default true
@@ -90,13 +93,18 @@ function state = compute_all_features(state, args, meta)
     % source / models
     p.addParameter('ComputeSource', true, @(x) islogical(x) && isscalar(x));
     p.addParameter('HeadModelPath', '', @(s) ischar(s) || isstring(s));
+    p.addParameter('HeadModelTemplate', '', @(s) ischar(s) || isstring(s));
     p.addParameter('HeadModel', [], @(x) isempty(x) || isstruct(x));
     p.addParameter('AtlasPath', '', @(s) ischar(s) || isstring(s));
+    p.addParameter('AtlasTemplate', '', @(s) ischar(s) || isstring(s));
     p.addParameter('SourcePos', [], @(x) isempty(x) || (isnumeric(x) && size(x, 2) == 3));
     p.addParameter('SurfaceModelPath', '', @(s) ischar(s) || isstring(s));
+    p.addParameter('ElectrodePath', '', @(s) ischar(s) || isstring(s));
+    p.addParameter('ElectrodeTemplate', '', @(s) ischar(s) || isstring(s));
     p.addParameter('TemplateElecFile', '', @(s) ischar(s) || isstring(s));
     p.addParameter('Elec', [], @(x) isempty(x) || isstruct(x));
     p.addParameter('Unit', 'mm', @(s) ischar(s) || isstring(s));
+    p.addParameter('UseCheckedHeadmodel', true, @(x) islogical(x) && isscalar(x));
 
     % per-band measures
     p.addParameter('ComputeDwpli', true, @(x) islogical(x) && isscalar(x));
@@ -121,6 +129,7 @@ function state = compute_all_features(state, args, meta)
     p.addParameter('FieldTripRoot', '', @(s) ischar(s) || isstring(s));
     p.addParameter('GretnaRoot', '', @(s) ischar(s) || isstring(s));
 
+    params = local_inherit_checked_headmodel(state, params);
     nv = state_struct2nv(params);
 
     state_require_eeg(state, op);
@@ -148,7 +157,7 @@ function state = compute_all_features(state, args, meta)
             warning('GRETNA not found on path; graph measures will be skipped at runtime.');
         end
 
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'validated', deps);
+        state = state_update_history(state, op, local_strip_geometry_params(R), 'validated', deps);
         return;
     end
 
@@ -195,7 +204,7 @@ function state = compute_all_features(state, args, meta)
     if nTrial < R.MinTrials
         msg = sprintf('[rest.compute_all_features] Skipping: nTrial=%d < threshold=%d', nTrial, R.MinTrials);
         log_step(state, meta, R.LogFile, msg);
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
+        state = state_update_history(state, op, local_strip_geometry_params(R), 'skipped', out);
         return;
     end
 
@@ -226,6 +235,9 @@ function state = compute_all_features(state, args, meta)
     if R.ComputeSource
         atlas = [];
         atlasPath = char(string(R.AtlasPath));
+        if isempty(atlasPath) && isfield(R, 'AtlasTemplate') && ~isempty(R.AtlasTemplate)
+            atlasPath = source.atlas_default_path(R.AtlasTemplate);
+        end
         if ~isempty(atlasPath)
             try
                 atlas = rest.atlas_load(atlasPath, 'NetworkOrder', R.AtlasNetworkOrder);
@@ -340,6 +352,10 @@ function state = compute_all_features(state, args, meta)
     res.params = paramSnap;
     res.nTrial = nTrial;
     res.subid = string(baseName);
+    hmQc = local_checked_headmodel_qc(state);
+    if ~isempty(hmQc)
+        res.headmodel_qc = hmQc;
+    end
 
     % ---- save ----
     if R.SaveMat
@@ -364,7 +380,7 @@ function state = compute_all_features(state, args, meta)
         state.rest.features = res;
     end
 
-    state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
+    state = state_update_history(state, op, local_strip_geometry_params(R), 'success', out);
 end
 
 % ----------------- helpers -----------------
@@ -436,6 +452,66 @@ function v = local_cfg_fallback(state, path, default)
     if isstring(v), v = char(v); end
 end
 
+function params = local_inherit_checked_headmodel(state, params)
+    if nargin < 2 || isempty(params)
+        params = struct();
+    end
+    useChecked = true;
+    if isfield(params, 'UseCheckedHeadmodel') && ~isempty(params.UseCheckedHeadmodel)
+        useChecked = logical(params.UseCheckedHeadmodel);
+    end
+    if ~useChecked || ~isstruct(state)
+        return;
+    end
+
+    hm = local_checked_headmodel(state);
+    if isempty(hm)
+        return;
+    end
+    if isfield(hm, 'headmodel') && ~isempty(hm.headmodel) && ...
+            (~isfield(params, 'HeadModel') || isempty(params.HeadModel))
+        params.HeadModel = hm.headmodel;
+    end
+    if isfield(hm, 'elec') && ~isempty(hm.elec) && ...
+            (~isfield(params, 'Elec') || isempty(params.Elec))
+        params.Elec = hm.elec;
+    end
+    if isfield(hm, 'unit') && ~isempty(hm.unit) && ...
+            (~isfield(params, 'Unit') || isempty(params.Unit))
+        params.Unit = hm.unit;
+    end
+end
+
+function hm = local_checked_headmodel(state)
+    hm = [];
+    if isstruct(state) && isfield(state, 'source') && isstruct(state.source) && ...
+            isfield(state.source, 'geometry') && isstruct(state.source.geometry)
+        hm = state.source.geometry;
+        return;
+    end
+    if isstruct(state) && isfield(state, 'rest') && isstruct(state.rest) && ...
+            isfield(state.rest, 'headmodel') && isstruct(state.rest.headmodel)
+        hm = state.rest.headmodel;
+    end
+end
+
+function qc = local_checked_headmodel_qc(state)
+    qc = [];
+    hm = local_checked_headmodel(state);
+    if isstruct(hm) && isfield(hm, 'qc') && ~isempty(hm.qc)
+        qc = hm.qc;
+    end
+end
+
+function params = local_strip_geometry_params(params)
+    params = state_strip_eeg_param(params);
+    for f = {'HeadModel','Elec'}
+        if isfield(params, f{1})
+            params.(f{1}) = [];
+        end
+    end
+end
+
 function data = eeglab_to_fieldtrip_epoched(EEG, R)
     % Minimal EEGLAB->FieldTrip conversion for epoched EEG.
     if ~isfield(EEG, 'data') || isempty(EEG.data)
@@ -489,7 +565,16 @@ function data = local_attach_elec(data, EEG, R)
         return;
     end
 
-    tmplFile = char(string(R.TemplateElecFile));
+    tmplFile = '';
+    if isfield(R, 'ElectrodePath')
+        tmplFile = char(string(R.ElectrodePath));
+    end
+    if isempty(tmplFile)
+        tmplFile = char(string(R.TemplateElecFile));
+    end
+    if isempty(tmplFile) && isfield(R, 'ElectrodeTemplate') && ~isempty(R.ElectrodeTemplate)
+        tmplFile = source.electrode_default_path(R.ElectrodeTemplate);
+    end
     if ~isempty(tmplFile)
         if ~exist('ft_read_sens', 'file')
             error('rest:MissingDependency:FieldTrip', 'FieldTrip not found (missing ft_read_sens).');

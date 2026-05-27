@@ -1,0 +1,57 @@
+{
+  "steps": [
+    {
+      "id": "S001",
+      "name": "Load epoched EEGLAB data",
+      "op": "load_set",
+      "args": {
+        "filename": "sub-001.set",
+        "filepath": "path/to/data"
+      }
+    },
+    {
+      "id": "S010",
+      "name": "Check source geometry",
+      "op": "check_headmodel",
+      "args": {
+        "HeadModelTemplate": "fieldtrip_standard_bem",
+        "ElectrodeTemplate": "fieldtrip_standard_1005",
+        "Unit": "mm",
+        "RealignMethod": "none",
+        "PlotQC": true,
+        "ReviewRequired": true
+      }
+    },
+    {
+      "id": "S020",
+      "name": "Reconstruct source epochs",
+      "op": "source_reconstruct_epochs",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "OutputLevel": "source",
+        "SourceSignalMode": "signed",
+        "UseCheckedHeadmodel": true,
+        "CovarianceWindow": [],
+        "Regularization": "5%",
+        "OrientationMode": "fixedori",
+        "KeepSourceFilter": true,
+        "KeepInState": true
+      }
+    },
+    {
+      "id": "S030",
+      "name": "Parcellate source epochs",
+      "op": "source_parcellate",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "Method": "first_pc",
+        "InputField": "epochs",
+        "OutputField": "parcel_epochs",
+        "KeepInState": true
+      }
+    }
+  ],
+  "Options": {
+    "validate_only": false
+  }
+}

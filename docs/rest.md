@@ -256,6 +256,7 @@ You can load and run it via:
 - Builds a `flow.Pipeline` configured with a **rest registry**.
 - The rest registry includes:
   - `load_set`, `save_set`, `segment_rest` (reused from `+prep`)
+  - `check_headmodel` (compatibility wrapper around `source.check_headmodel`)
   - `compute_all_features` (from `+rest`)
 
 **Signature**
@@ -277,7 +278,90 @@ You can load and run it via:
 
 ---
 
-### 4.3 `rest.compute_all_features` (Main Entry Point)
+### 4.3 `source.check_headmodel` / `rest.check_headmodel`
+
+**What it does**
+
+Checks and optionally realigns the source-analysis geometry before feature extraction:
+
+- loads `HeadModelPath` / `HeadModel`
+- loads `TemplateElecFile`, `Elec`, or EEG `chanlocs` XYZ coordinates
+- converts headmodel/electrodes to a common `Unit`
+- matches electrode labels to `state.EEG.chanlocs`
+- optionally realigns electrodes with FieldTrip `ft_electroderealign`
+- computes QC metrics against the scalp/headshape surface
+- stores checked geometry in `state.source.geometry` for source-space workflows
+- `rest.check_headmodel` remains as a compatibility wrapper and mirrors the same geometry to `state.rest.headmodel`
+
+**Recommended position in the pipeline**
+
+Run this after loading/segmenting data and before `compute_all_features`.
+
+```matlab
+struct('id','S015','name','CheckHeadModel','op','check_headmodel', ...
+  'args', struct( ...
+    'HeadModelPath', headModelPath, ...
+    'TemplateElecFile', elecFile, ...
+    'Unit', 'mm', ...
+    'RealignMethod', 'project', ...   % 'none'|'project'|'headshape'|'template'|'fiducial'
+    'FailOnQC', true, ...
+    'PlotQC', true, ...
+    'FigurePath', fullfile(outDir, 'headmodel_qc.png'))))
+```
+
+**Common parameters**
+
+- `HeadModelPath` / `HeadModel`: FieldTrip volume conductor model
+- `TemplateElecFile` / `Elec`: electrode definition; if omitted, EEG `chanlocs.X/Y/Z` are used
+- `Unit` (default `'mm'`): target unit for both headmodel and electrodes
+- `RealignMethod` (default `'none'`): `none`, `project`, `headshape`, `template`, or `fiducial`
+- `RealignMethod='interactive'`: open FieldTrip's manual realignment GUI; use this for new EEG systems, unusual caps, or failed QC
+- `Warp` (default `'rigidbody'`): FieldTrip warp for `headshape`/`template`
+- `Headshape` / `HeadshapePath`: optional surface; otherwise the outer/scalp BEM boundary is used
+- `ScalpIndex`: optional BEM boundary index override; default chooses the largest boundary
+- `MinMatchedChannels` (default `16`)
+- `MaxMedianSurfaceDistance` (default `15` mm)
+- `MaxP95SurfaceDistance` (default `35` mm)
+- `FailOnQC` (default `true`): fail the step when geometry QC does not pass
+- `ReviewRequired` (default `true`): record/log that a human should inspect the overlay; recommended for the first dataset from each EEG system
+- `PlotQC` / `FigurePath`: save a scalp/electrode overlay for visual inspection
+
+For batch work, keep `PlotQC=true` and archive the generated overlay PNG. For a new cap/system, inspect the PNG manually or run `RealignMethod='interactive'`; after that, the same system can usually rely on automated QC thresholds.
+
+**Standalone human QC helper**
+
+Use `source.inspect_headmodel` when you want to check one file interactively or generate a QC overlay without building a full pipeline:
+
+```matlab
+qc = source.inspect_headmodel( ...
+  fullfile(dataDir, 'sub-113_task-rest_run-01_eeg_prepEC.set'), ...
+  'HeadModelPath', headModelPath, ...
+  'TemplateElecFile', elecFile, ...
+  'OutputPath', outDir, ...
+  'OutputBaseName', 'sub-113', ...
+  'RealignMethod', 'none', ...
+  'PlotQC', true);
+```
+
+For manual adjustment:
+
+```matlab
+qc = source.inspect_headmodel(EEG, ...
+  'HeadModelPath', headModelPath, ...
+  'TemplateElecFile', elecFile, ...
+  'RealignMethod', 'interactive');
+```
+
+**Output in state**
+
+- `state.source.geometry.headmodel`: converted headmodel
+- `state.source.geometry.elec`: matched and optionally realigned electrodes
+- `state.source.geometry.qc`: matched-channel counts, surface distances, pass/fail status
+- `state.rest.headmodel.*`: compatibility mirror when using `rest.check_headmodel`
+
+---
+
+### 4.4 `rest.compute_all_features` (Main Entry Point)
 
 **What it does**
 
@@ -343,6 +427,7 @@ Source / models:
 - `ComputeSource` (default `true`)
 - `HeadModelPath` (default `''`) or `HeadModel` (default `[]`)
 - `TemplateElecFile` (default `''`) or `Elec` (default `[]`)
+- `UseCheckedHeadmodel` (default `true`): reuse `state.source.geometry` from `source.check_headmodel` when available; legacy `state.rest.headmodel` is also supported
 - `AtlasPath` (default `''`) and/or `SourcePos` (default `[]`)
 - `Unit` (default `'mm'`)
 
@@ -380,7 +465,7 @@ Dependency auto-wiring:
 
 ---
 
-### 4.4 `rest.compute_power`
+### 4.5 `rest.compute_power`
 
 **What it does**
 
@@ -398,6 +483,20 @@ power = rest.compute_power(data, params);
 
 - `data`: FieldTrip epoched data (`data.trial{t} = channels x time`)
 - `params.Taper`, `params.Tapsmofrq`, `params.Pad`
+
+For topoplots, `rest.plot_power` uses `res.power.elec` by default. If a sensor-only result was computed before `source.check_headmodel`, pass a checked/template electrode definition explicitly:
+
+```matlab
+[fPsd, fTopo] = rest.plot_power(res, ...
+  'TemplateElecFile', fullfile(ftRoot, 'template', 'electrode', 'standard_1005.elc'));
+```
+
+Available topoplot overrides:
+
+- `Elec`: FieldTrip electrode struct
+- `TemplateElecFile`: electrode file read with `ft_read_sens`
+- `Layout`: explicit FieldTrip layout
+- `Rotate`: optional `cfg.rotate` value passed to FieldTrip
 
 **Output**
 

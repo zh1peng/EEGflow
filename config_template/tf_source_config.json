@@ -1,0 +1,74 @@
+{
+  "steps": [
+    {
+      "id": "S001",
+      "name": "Load epoched EEGLAB data",
+      "op": "load_set",
+      "args": {
+        "filename": "sub-001.set",
+        "filepath": "path/to/data"
+      }
+    },
+    {
+      "id": "S010",
+      "name": "Check source geometry",
+      "op": "check_headmodel",
+      "args": {
+        "HeadModelTemplate": "fieldtrip_standard_bem",
+        "ElectrodeTemplate": "fieldtrip_standard_1005",
+        "Unit": "mm",
+        "RealignMethod": "none",
+        "PlotQC": true
+      }
+    },
+    {
+      "id": "S020",
+      "name": "Reconstruct source epochs",
+      "op": "source_reconstruct_epochs",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "OutputLevel": "source",
+        "SourceSignalMode": "signed",
+        "UseCheckedHeadmodel": true,
+        "Regularization": "5%",
+        "OrientationMode": "fixedori"
+      }
+    },
+    {
+      "id": "S030",
+      "name": "Parcellate source epochs",
+      "op": "source_parcellate",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "Method": "first_pc"
+      }
+    },
+    {
+      "id": "S040",
+      "name": "Compute source TF",
+      "op": "tf_compute_source",
+      "args": {
+        "InputField": "parcel_epochs",
+        "ConditionField": "",
+        "Freqs": [3, 30],
+        "Cycles": [3, 0.5],
+        "BaselineWindow": []
+      }
+    },
+    {
+      "id": "S050",
+      "name": "Extract source TF feature",
+      "op": "tf_extract_source_feature",
+      "args": {
+        "FeatureName": "source_tf_alpha_window",
+        "Condition": "all",
+        "FreqWindow": [8, 12],
+        "TimeWindow": [0.25, 0.50],
+        "Metric": "mean"
+      }
+    }
+  ],
+  "Options": {
+    "validate_only": false
+  }
+}

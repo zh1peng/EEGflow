@@ -13,5 +13,10 @@ function reg = init_registry()
     reg('segment_rest') = @prep.segment_rest;
 
     % Rest feature extraction
+    reg('check_headmodel') = @rest.check_headmodel;
+    reg('source_reconstruct_epochs') = @source.reconstruct_epochs;
+    reg('source_parcellate') = @source.parcellate_timeseries;
+    reg('source_compute_erps') = @source.compute_erps;
+    reg('source_extract_window_feature') = @source.extract_window_feature;
     reg('compute_all_features') = @rest.compute_all_features;
 end

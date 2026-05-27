@@ -1,5 +1,6 @@
 /data/*
 /out/*
+/output/
 /test/*
 !/test/analysis_erp_subject_contrast_test.m
 !/test/analysis_erp_cluster_stats_test.m

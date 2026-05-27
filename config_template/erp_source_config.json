@@ -1,0 +1,70 @@
+{
+  "steps": [
+    {
+      "id": "S001",
+      "name": "Load epoched EEGLAB data",
+      "op": "load_set",
+      "args": {
+        "filename": "sub-001.set",
+        "filepath": "path/to/data"
+      }
+    },
+    {
+      "id": "S010",
+      "name": "Check source geometry",
+      "op": "check_headmodel",
+      "args": {
+        "HeadModelTemplate": "fieldtrip_standard_bem",
+        "ElectrodeTemplate": "fieldtrip_standard_1005",
+        "Unit": "mm",
+        "RealignMethod": "none",
+        "PlotQC": true
+      }
+    },
+    {
+      "id": "S020",
+      "name": "Reconstruct source epochs",
+      "op": "source_reconstruct_epochs",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "OutputLevel": "source",
+        "SourceSignalMode": "signed",
+        "UseCheckedHeadmodel": true,
+        "Regularization": "5%",
+        "OrientationMode": "fixedori"
+      }
+    },
+    {
+      "id": "S030",
+      "name": "Parcellate source epochs",
+      "op": "source_parcellate",
+      "args": {
+        "AtlasTemplate": "Schaefer100",
+        "Method": "first_pc"
+      }
+    },
+    {
+      "id": "S040",
+      "name": "Compute source ERPs",
+      "op": "erp_compute_source_erps",
+      "args": {
+        "ConditionField": "",
+        "BaselineWindow": []
+      }
+    },
+    {
+      "id": "S050",
+      "name": "Extract source ERP feature",
+      "op": "erp_extract_source_feature",
+      "args": {
+        "FeatureName": "source_erp_window_mean",
+        "TimeWindow": [0.25, 0.35],
+        "Metric": "mean",
+        "Condition": "all"
+      }
+    }
+  ],
+  "Options": {
+    "validate_only": false
+  }
+}

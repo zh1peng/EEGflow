@@ -43,4 +43,15 @@ function reg = init_registry()
     reg('tf_stats_plane') = @analysis.tf_stats_plane;
     reg('tf_feature_stats') = @analysis.tf_feature_stats;
     reg('filter_complete_cases') = @analysis.filter_complete_cases;
+
+    % Generic source-space operations. These produce virtual-channel data
+    % where source points or parcels replace sensor electrodes.
+    reg('check_headmodel') = @source.check_headmodel;
+    reg('source_reconstruct_epochs') = @source.reconstruct_epochs;
+    reg('source_parcellate') = @source.parcellate_timeseries;
+    reg('erp_compute_source_erps') = @analysis.erp_compute_source_erps;
+    reg('erp_compute_source_contrast') = @analysis.erp_compute_source_contrast;
+    reg('erp_extract_source_feature') = @analysis.erp_extract_source_feature;
+    reg('tf_compute_source') = @analysis.tf_compute_source;
+    reg('tf_extract_source_feature') = @analysis.tf_extract_source_feature;
 end
