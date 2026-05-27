@@ -8,7 +8,7 @@ It focuses on:
 3. How to plot and extract ERP features for downstream statistics
 
 This guide is written against the current code in `+analysis/`.
-Current ERP module version: `analysis.get_version()` (this release: `0.7.0`).
+Current ERP module version: `analysis.get_version()` (this release: `0.8.0`).
 
 ---
 

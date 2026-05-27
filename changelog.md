@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.8.0 - 2026-05-27
+
+- Added the generic `+source` source-space reconstruction layer:
+  - headmodel/electrode template resolving and geometry QC,
+  - LCMV spatial filter computation,
+  - source epoch reconstruction,
+  - source-to-parcel parcellation,
+  - source QC reports and source plotting helpers.
+- Added source ERP and source TF workflows in `+analysis`.
+- Refactored resting-state source power/connectivity paths to reuse the shared `+source` layer.
+- Added generic source config templates and source analysis documentation.
+- Bumped analysis/toolbox version to `0.8.0`.
+
 ## v0.7.0 - 2026-05-12
 
 - Added ERP waveform cluster permutation correction via `mcc='cluster'` for:
