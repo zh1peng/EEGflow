@@ -87,10 +87,23 @@ function state = compute_erps(state, args, meta)
 
     if ~isfield(state, 'source') || ~isstruct(state.source), state.source = struct(); end
     state.source.erp = erp;
+    if ~isfield(state.source, 'qc') || ~isstruct(state.source.qc)
+        state.source.qc = struct();
+    end
+    state.source.qc.conditions = local_condition_qc(erp);
 
     out = struct('n_conditions', numel(conds), 'conditions', cellstr(conds(:)));
     log_step(state, meta, R.LogFile, sprintf('[source.compute_erps] Computed %d source ERP condition(s).', numel(conds)));
     state = state_update_history(state, op, R, 'success', out);
+end
+
+function qc = local_condition_qc(erp)
+    names = fieldnames(erp.conditions);
+    qc = struct();
+    for i = 1:numel(names)
+        c = erp.conditions.(names{i});
+        qc.(names{i}) = c.n_trial;
+    end
 end
 
 function labels = local_condition_labels(state, src, R)

@@ -49,7 +49,8 @@
       "op": "erp_compute_source_erps",
       "args": {
         "ConditionField": "",
-        "BaselineWindow": []
+        "BaselineWindow": [],
+        "KeepTrials": true
       }
     },
     {

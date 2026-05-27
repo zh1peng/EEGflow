@@ -1,4 +1,5 @@
-function [connMatrix]=compute_dwpli(data, source,params, freqBand)
+function connMatrix = compute_dwpli(data, spatialFilter, params, freqBand)
+    if nargin < 2, spatialFilter = []; end
     if nargin < 3 || isempty(params)
         params = struct();
     end
@@ -8,24 +9,23 @@ function [connMatrix]=compute_dwpli(data, source,params, freqBand)
     if ~isfield(params, 'FreqBand') || ~isstruct(params.FreqBand) || ~isfield(params.FreqBand, freqBand)
         error('rest:compute_dwpli:MissingFreqBand', 'params.FreqBand.%s is required.', char(string(freqBand)));
     end
-    if size(data.trial, 2) < params.MinTrials
+    if numel(data.trial) < params.MinTrials
         error('rest:compute_dwpli:TooFewTrials', ...
-            'Recording has %d epochs, below MinTrials=%d.', size(data.trial, 2), params.MinTrials);
+            'Recording has %d epochs, below MinTrials=%d.', numel(data.trial), params.MinTrials);
     end
     
-    % Band-pass filter the data in the relevant frequency band
-    cfg = [];
-    cfg.bpfilter = 'yes';
-    cfg.bpfreq = params.FreqBand.(freqBand);
-    data = ft_preprocessing(cfg, data);
-    
-   
-    % Reconstruct the virtual time series (apply spatial filter to sensor level
-    % data)
-    cfg  = [];
-    cfg.pos = source.pos(source.inside,:);
-    virtChan_data = ft_virtualchannel(cfg,data,source);
-    clear data source;
+    p = params;
+    p.BandName = char(string(freqBand));
+    p.BandpassRange = params.FreqBand.(freqBand);
+    if isempty(spatialFilter)
+        cfg = [];
+        cfg.bpfilter = 'yes';
+        cfg.bpfreq = p.BandpassRange;
+        virtChan_data = ft_preprocessing(cfg, data);
+    else
+        virtChan_data = source.reconstruct_virtual_channels(data, spatialFilter, p);
+    end
+    clear data spatialFilter;
     
     % Frequencies of interest
     fois = params.FreqBand.(freqBand)(1):params.FreqResConnectivity:params.FreqBand.(freqBand)(2);

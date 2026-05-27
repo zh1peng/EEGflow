@@ -1,4 +1,5 @@
-function connMatrix = compute_aec(data, source, params, freqBand)
+function connMatrix = compute_aec(data, spatialFilter, params, freqBand)
+    if nargin < 2, spatialFilter = []; end
 %COMPUTE_AEC Compute source-space amplitude envelope correlation (AEC).
 %
 % This computes orthogonalized AEC (Hipp et al., 2012, Nat Neurosci) on
@@ -21,16 +22,17 @@ function connMatrix = compute_aec(data, source, params, freqBand)
 %   The underlying AEC implementation is adapted from DISCOVER-EEG custom
 %   functions (CC BY 4.0). See rest.aecConnectivity for details.
 
-    % Band-pass filter the data in the relevant frequency band
-    cfg = [];
-    cfg.bpfilter = 'yes';
-    cfg.bpfreq = params.FreqBand.(freqBand);
-    data = ft_preprocessing(cfg, data);
-
-    % Reconstruct the virtual time series (apply spatial filter to sensor-level data)
-    cfg = [];
-    cfg.pos = source.pos(source.inside, :);
-    virtChan_data = ft_virtualchannel(cfg, data, source);
+    p = params;
+    p.BandName = char(string(freqBand));
+    p.BandpassRange = params.FreqBand.(freqBand);
+    if isempty(spatialFilter)
+        cfg = [];
+        cfg.bpfilter = 'yes';
+        cfg.bpfreq = p.BandpassRange;
+        virtChan_data = ft_preprocessing(cfg, data);
+    else
+        virtChan_data = source.reconstruct_virtual_channels(data, spatialFilter, p);
+    end
 
     % Compute orthogonalized AEC per epoch, then average across epochs.
     Cepoch = rest.aecConnectivity(virtChan_data, 'Verbose', false);

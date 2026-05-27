@@ -27,8 +27,10 @@ src.cfg
 
 ```matlab
 state = source.check_headmodel(state, args);
+filter = source.compute_spatial_filter(data, args);
 state = source.reconstruct_epochs(state, args);
 state = source.parcellate_timeseries(state, args);
+state = source.qc_report(state, struct('OutputFile', 'source_qc_report.md'));
 ```
 
 Geometry QC is stored in `state.source.geometry.*` and summarized in
@@ -42,6 +44,10 @@ Use template names instead of hard-coded paths when possible:
 'ElectrodeTemplate', 'fieldtrip_standard_1005'
 'AtlasTemplate', 'Schaefer100'
 ```
+
+`Schaefer100` is bundled as the default coarse atlas. `Schaefer200` and
+`Desikan` are recognized resolver names when the matching centroid CSV files
+are present under `resources/atlas`; otherwise pass `AtlasPath` explicitly.
 
 ## Downstream Modules
 
@@ -60,8 +66,19 @@ state = analysis.tf_compute_source(state, args);
 state = analysis.tf_extract_source_feature(state, args);
 ```
 
+Plot helpers:
+
+```matlab
+source.plot_headmodel_qc(state.source.geometry);
+source.plot_source_timeseries(state.source.epochs);
+source.plot_source_map(state.source.epochs, feature.value);
+analysis.erp_plot_source_waveform(state, args);
+analysis.tf_plot_source(state, args);
+```
+
 Resting-state workflows keep power/connectivity/graph logic in `+rest`, but
-reuse `+source` for headmodel loading, electrode QC, and LCMV spatial filters.
+reuse `+source` for headmodel loading, electrode QC, LCMV spatial filters,
+virtual-channel reconstruction, source power, and parcellation metadata.
 
 ## Interpretation Boundaries
 

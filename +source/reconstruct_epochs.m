@@ -101,6 +101,9 @@ function state = reconstruct_epochs(state, args, meta)
         if ~isfield(state.source, 'qc') || ~isstruct(state.source.qc)
             state.source.qc = struct();
         end
+        if isstruct(filterInfo) && isfield(filterInfo, 'qc')
+            state.source.qc.forward = filterInfo.qc;
+        end
         state.source.qc.signal = local_signal_qc(src);
         if R.KeepSourceFilter
             state.source.spatial_filter = sourceFilter;
@@ -138,9 +141,12 @@ function src = local_build_source_epochs(virt, sourceFilter, insideIdx, R, filte
                 X = sqrt(X.^2);
             case 'power'
                 X = X.^2;
+            case 'first_pc'
+                % Point-level signals are already virtual channels here.
+                % Parcel-level first PC is handled by parcellate_timeseries.
             otherwise
                 error('source:reconstruct_epochs:BadSignalMode', ...
-                    'Unsupported SourceSignalMode=%s. Use signed, absolute, rms, vectornorm, or power.', mode);
+                    'Unsupported SourceSignalMode=%s. Use signed, absolute, rms, vectornorm, power, or first_pc.', mode);
         end
         trial{t} = X;
     end

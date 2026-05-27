@@ -233,6 +233,7 @@ function state = compute_all_features(state, args, meta)
     out.bands_ok = 0;
 
     if R.ComputeSource
+        sourceTs = local_source_timeseries(state);
         atlas = [];
         atlasPath = char(string(R.AtlasPath));
         if isempty(atlasPath) && isfield(R, 'AtlasTemplate') && ~isempty(R.AtlasTemplate)
@@ -254,19 +255,37 @@ function state = compute_all_features(state, args, meta)
             bandName = bands{iB};
             log_step(state, meta, R.LogFile, sprintf('[rest.compute_all_features] Band=%s', bandName));
             try
-                source = rest.compute_spatial_filter(data, R, bandName);
+                spatialFilter = [];
+                if isempty(sourceTs)
+                    spatialFilter = rest.compute_spatial_filter(data, R, bandName);
+                end
 
                 % Keep minimal source geometry even when KeepSource=false (for plotting/reporting).
-                if isfield(source, 'pos') && isfield(source, 'inside') && ~isempty(source.pos) && ~isempty(source.inside)
-                    res.(bandName).source_pos = source.pos(source.inside, :);
-                    res.(bandName).source_inside_idx = find(source.inside);
-                    if isfield(source, 'unit') && ~isempty(source.unit)
-                        res.(bandName).source_unit = source.unit;
+                if ~isempty(sourceTs)
+                    if isfield(sourceTs, 'source_pos') && ~isempty(sourceTs.source_pos)
+                        res.(bandName).source_pos = sourceTs.source_pos;
+                    end
+                    if isfield(sourceTs, 'source_inside_idx') && ~isempty(sourceTs.source_inside_idx)
+                        res.(bandName).source_inside_idx = sourceTs.source_inside_idx;
+                    elseif isfield(sourceTs, 'label')
+                        res.(bandName).source_inside_idx = (1:numel(sourceTs.label))';
+                    end
+                    if isfield(sourceTs, 'unit') && ~isempty(sourceTs.unit)
+                        res.(bandName).source_unit = sourceTs.unit;
+                    end
+                    if isfield(sourceTs, 'parcellation')
+                        res.(bandName).parcellation = sourceTs.parcellation;
+                    end
+                elseif isfield(spatialFilter, 'pos') && isfield(spatialFilter, 'inside') && ~isempty(spatialFilter.pos) && ~isempty(spatialFilter.inside)
+                    res.(bandName).source_pos = spatialFilter.pos(spatialFilter.inside, :);
+                    res.(bandName).source_inside_idx = find(spatialFilter.inside);
+                    if isfield(spatialFilter, 'unit') && ~isempty(spatialFilter.unit)
+                        res.(bandName).source_unit = spatialFilter.unit;
                     end
                 end
 
                 % Store parcellation metadata (ROI/network labels) for plotting/reordering.
-                if isfield(res.(bandName), 'source_inside_idx') && ~isempty(res.(bandName).source_inside_idx)
+                if isempty(sourceTs) && isfield(res.(bandName), 'source_inside_idx') && ~isempty(res.(bandName).source_inside_idx)
                     try
                         idxInAtlas = res.(bandName).source_inside_idx;
                         if ~isempty(atlas) && isstruct(atlas) && isfield(atlas, 'pos') && ~isempty(atlas.pos)
@@ -291,9 +310,14 @@ function state = compute_all_features(state, args, meta)
                 % Store source power (inside nodes) for source-space visualization.
                 if R.ComputeSourcePower
                     try
-                        pow = local_extract_source_pow(source);
-                        if isempty(pow)
-                            pow = rest.compute_source_power(data, source, R, bandName);
+                        pow = [];
+                        if ~isempty(spatialFilter)
+                            pow = local_extract_source_pow(spatialFilter);
+                        end
+                        if isempty(pow) && isempty(sourceTs)
+                            pow = rest.compute_source_power(data, spatialFilter, R, bandName);
+                        elseif isempty(pow)
+                            pow = rest.compute_source_power(sourceTs, [], R, bandName);
                         end
                         if ~isempty(pow)
                             res.(bandName).source_pow = pow(:);
@@ -307,15 +331,23 @@ function state = compute_all_features(state, args, meta)
                     end
                 end
 
-                if R.KeepSource
-                    res.(bandName).source = source;
+                if R.KeepSource && ~isempty(spatialFilter)
+                    res.(bandName).source = spatialFilter;
                 end
 
                 if R.ComputeDwpli
-                    res.(bandName).dwpli_connMatrix = rest.compute_dwpli(data, source, R, bandName);
+                    if isempty(sourceTs)
+                        res.(bandName).dwpli_connMatrix = rest.compute_dwpli(data, spatialFilter, R, bandName);
+                    else
+                        res.(bandName).dwpli_connMatrix = rest.compute_dwpli(sourceTs, [], R, bandName);
+                    end
                 end
                 if R.ComputeAec
-                    res.(bandName).aec_connMatrix = rest.compute_aec(data, source, R, bandName);
+                    if isempty(sourceTs)
+                        res.(bandName).aec_connMatrix = rest.compute_aec(data, spatialFilter, R, bandName);
+                    else
+                        res.(bandName).aec_connMatrix = rest.compute_aec(sourceTs, [], R, bandName);
+                    end
                 end
 
                 if R.ComputeGraph && exist('gretna_sw_batch_networkanalysis_weight', 'file')
@@ -397,7 +429,10 @@ function local_maybe_add_deps(R)
         if ~isempty(ftRoot) && isfolder(ftRoot)
             addpath(ftRoot);
             if exist('ft_defaults', 'file')
-                try, ft_defaults; catch, end %#ok<CTCH>
+                try
+                    ft_defaults;
+                catch
+                end
             end
         end
     end
@@ -430,13 +465,16 @@ function local_require_fieldtrip(R)
     end
 
     if exist('ft_defaults', 'file')
-        try, ft_defaults; catch, end %#ok<CTCH>
+        try
+            ft_defaults;
+        catch
+        end
     end
 end
 
 function v = local_cfg_fallback(state, path, default)
-    v = default;
     if nargin < 3, default = []; end
+    v = default;
     if ~isstruct(state) || ~isfield(state, 'cfg') || ~isstruct(state.cfg)
         return;
     end
@@ -500,6 +538,27 @@ function qc = local_checked_headmodel_qc(state)
     hm = local_checked_headmodel(state);
     if isstruct(hm) && isfield(hm, 'qc') && ~isempty(hm.qc)
         qc = hm.qc;
+    end
+end
+
+function src = local_source_timeseries(state)
+    src = [];
+    if ~isstruct(state) || ~isfield(state, 'source') || ~isstruct(state.source)
+        return;
+    end
+    if isfield(state.source, 'parcel_epochs') && isstruct(state.source.parcel_epochs)
+        src = state.source.parcel_epochs;
+    elseif isfield(state.source, 'epochs') && isstruct(state.source.epochs)
+        src = state.source.epochs;
+    end
+    if ~isempty(src)
+        needed = {'label','trial','time','fsample'};
+        for i = 1:numel(needed)
+            if ~isfield(src, needed{i})
+                src = [];
+                return;
+            end
+        end
     end
 end
 

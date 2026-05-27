@@ -62,7 +62,7 @@ end
 
 function args = local_inject_defaults(op, args, cfg)
     opName = lower(char(op));
-    opsNeedLogfile = {'load_set','save_set','check_headmodel','source_reconstruct_epochs','source_parcellate','source_compute_erps','source_extract_window_feature','erp_compute_source_erps','erp_extract_source_feature','tf_compute_source','tf_extract_source_feature'};
+    opsNeedLogfile = {'load_set','save_set','check_headmodel','source_reconstruct_epochs','source_parcellate','source_qc_report','source_compute_erps','source_extract_window_feature','erp_compute_source_erps','erp_extract_source_feature','erp_plot_source_waveform','tf_compute_source','tf_extract_source_feature','tf_plot_source'};
     if (ismember(opName, opsNeedLogfile) || isfield(args, 'LogFile')) && ...
             (~isfield(args, 'LogFile') || isempty(args.LogFile))
         if isfield(cfg, 'LogFile') && ~isempty(cfg.LogFile)

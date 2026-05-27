@@ -147,12 +147,23 @@ function parcel = local_apply_parcellation(src, parcelId, meta, R)
     parcel.trial = trial;
     parcel.level = 'parcel';
     parcel.parcellation = local_subset_meta(meta, labels);
+    if isfield(src, 'source_pos') && ~isempty(src.source_pos)
+        parcel.parcellation.centroid = local_centroids(double(src.source_pos), group, nParcel);
+        parcel.source_pos = parcel.parcellation.centroid;
+    end
     parcel.cfg = R;
     parcel.qc = struct( ...
         'n_source', numel(parcelId), ...
         'n_parcel', nParcel, ...
         'coverage', mean(~ismissing(parcelId) & parcelId ~= ""), ...
         'method', R.Method);
+end
+
+function C = local_centroids(pos, group, nParcel)
+    C = nan(nParcel, 3);
+    for p = 1:nParcel
+        C(p, :) = mean(pos(group == p, :), 1, 'omitnan');
+    end
 end
 
 function y = local_first_pc(X)

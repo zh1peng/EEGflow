@@ -49,6 +49,14 @@
         "OutputField": "parcel_epochs",
         "KeepInState": true
       }
+    },
+    {
+      "id": "S040",
+      "name": "Write source QC report",
+      "op": "source_qc_report",
+      "args": {
+        "OutputFile": "source_qc_report.md"
+      }
     }
   ],
   "Options": {

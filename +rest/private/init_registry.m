@@ -16,6 +16,7 @@ function reg = init_registry()
     reg('check_headmodel') = @rest.check_headmodel;
     reg('source_reconstruct_epochs') = @source.reconstruct_epochs;
     reg('source_parcellate') = @source.parcellate_timeseries;
+    reg('source_qc_report') = @source.qc_report;
     reg('source_compute_erps') = @source.compute_erps;
     reg('source_extract_window_feature') = @source.extract_window_feature;
     reg('compute_all_features') = @rest.compute_all_features;

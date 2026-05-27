@@ -13,7 +13,7 @@ function [sourceFilter, info] = compute_spatial_filter(data, params)
     local_require_fieldtrip();
 
     R = local_defaults(params);
-    headmodel = load_headmodel(R, R.Unit);
+    headmodel = source.load_headmodel(R, R.Unit);
     [pos, atlas] = local_resolve_positions(R);
 
     dataCov = data;
@@ -83,6 +83,8 @@ function [sourceFilter, info] = compute_spatial_filter(data, params)
     info.bandpass_range = R.BandpassRange;
     info.covariance_window = R.CovarianceWindow;
     info.atlas = atlas;
+    info.leadfield = leadfield;
+    info.qc = local_forward_qc(sourceFilter, leadfield, R);
 end
 
 function R = local_defaults(params)
@@ -155,6 +157,26 @@ function idx = local_inside_indices(sourceFilter)
     else
         idx = double(inside(:));
     end
+end
+
+function qc = local_forward_qc(sourceFilter, leadfield, R)
+    insideIdx = local_inside_indices(sourceFilter);
+    ranks = nan(numel(insideIdx), 1);
+    if isfield(leadfield, 'leadfield') && iscell(leadfield.leadfield)
+        for i = 1:numel(insideIdx)
+            lf = leadfield.leadfield{insideIdx(i)};
+            if ~isempty(lf)
+                ranks(i) = rank(double(lf));
+            end
+        end
+    end
+    qc = struct();
+    qc.n_inside = numel(insideIdx);
+    qc.leadfield_rank_min = min(ranks, [], 'omitnan');
+    qc.leadfield_rank_median = median(ranks, 'omitnan');
+    qc.regularization = R.Lambda;
+    qc.orientation_mode = R.OrientationMode;
+    qc.filter_success = qc.n_inside > 0;
 end
 
 function local_require_fieldtrip()
