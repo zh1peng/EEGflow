@@ -329,14 +329,15 @@ Outputs written into `EEG.etc.EEGdojo` include detector results and summaries.
 
 ### 4.13 `prep.remove_bad_ICs`
 
-Runs ICA (if needed) and rejects artifactual components.
+Recomputes ICA using PCA dimension `min(EEG.nbchan - 1, getrank(data))`, then rejects artifactual components. With ICA filtering enabled, weights are transferred back and activations are recomputed on the original data.
 
 Key args:
 
 - `FilterICAOn` / `FilterICALocutoff` (high-pass for ICA)
 - `ICAType` (default `'runica'`)
 - `ICLabelOn` / `ICLabelThreshold`
-- `FASTEROn` / `EOGChanLabel`
+- `FASTEROn` / `EOGChanLabel` (FASTER is skipped if no matching EOG channels exist)
+- `BrainIncludeTreshold` (default `0.7`): when ICLabel is enabled, protects components above this brain probability from FASTER/ECG rejection.
 - `DetectECG` / `ECG_Struct` / `ECGCorrelationThreshold`
 
 ### 4.14 `prep.remove_bad_epoch`
@@ -416,8 +417,10 @@ Key args:
 - `BlockLabel` (default `"EC"`)
 - `StartCode`, `EndCode` (or `BlockDurSec` if no `EndCode`)
 - `TrimStartSec`, `TrimEndSec`
-- `EpochLength` (ms), `EpochOverlap` (0..1)
+- `EpochLength` (ms, default `4000`), `EpochOverlap` (0..1)
 - `PreserveICA` (default `true`): keep ICA fields across block splitting/merge
+
+If no epochs can be produced, `state.EEG` is empty and the step is recorded as skipped, matching EEGdojo.
 
 ### 4.23 `prep.register_new_op`
 

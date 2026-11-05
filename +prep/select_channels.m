@@ -26,7 +26,7 @@ function state = select_channels(state, args, meta)
 %       Type: numeric; Shape: vector; Default: []
 %       Channel indices to keep.
 %   - ChanLabels
-%       Type: cellstr|char|string; Default: {}
+%       Type: cellstr|char; Default: {}
 %       Channel labels to keep; resolved via chans2idx.
 %   - LogFile
 %       Type: char|string; Default: ''
@@ -55,7 +55,7 @@ function state = select_channels(state, args, meta)
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('ChanIdx', [], @(x) isnumeric(x) && isvector(x));
-    p.addParameter('ChanLabels', {}, @(x) iscellstr(x) || ischar(x) || isstring(x));
+    p.addParameter('ChanLabels', {}, @(x) iscellstr(x) || ischar(x));
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
     nv = state_struct2nv(params);
 
@@ -75,17 +75,40 @@ function state = select_channels(state, args, meta)
     end
 
     channels_to_select_idx = [];
-    if ~isempty(R.ChanIdx)
-        channels_to_select_idx = [channels_to_select_idx, R.ChanIdx(:)'];
-    end
-    if ~isempty(R.ChanLabels)
-        channels_to_select_idx = [channels_to_select_idx, chans2idx(state.EEG, R.ChanLabels)];
-    end
-    channels_to_select_idx = unique(channels_to_select_idx);
 
+    if ~isempty(R.ChanIdx)
+        channels_to_select_idx = [channels_to_select_idx, R.ChanIdx];
+        log_step(state, meta, R.LogFile, sprintf('[select_channels] Channels to select by index: %s', num2str(R.ChanIdx)));
+    end
+
+    if ~isempty(R.ChanLabels)
+        if ischar(R.ChanLabels)
+            R.ChanLabels = {R.ChanLabels};
+        end
+        idx_from_labels = chans2idx(state.EEG, R.ChanLabels, 'MustExist', false);
+        if ~isempty(idx_from_labels)
+            channels_to_select_idx = [channels_to_select_idx, idx_from_labels];
+            log_step(state, meta, R.LogFile, sprintf('[select_channels] Channels to select by label: %s (indices: %s)', strjoin(R.ChanLabels, ', '), num2str(idx_from_labels)));
+        else
+            log_step(state, meta, R.LogFile, sprintf('[select_channels] No channels found for labels: %s', strjoin(R.ChanLabels, ', ')));
+        end
+    end
+
+    channels_to_select_idx = unique(channels_to_select_idx); % Ensure unique indices
+    channels_to_select_idx(channels_to_select_idx > state.EEG.nbchan | channels_to_select_idx < 1) = []; % Remove out-of-bounds indices
+
+    if isempty(channels_to_select_idx)
+        log_step(state, meta, R.LogFile, '[select_channels] No valid channels to select after processing inputs. Returning original EEG.');
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        return;
+    end
+
+    log_step(state, meta, R.LogFile, sprintf('[select_channels] Selecting %d channels: %s', length(channels_to_select_idx), num2str(channels_to_select_idx)));
     state.EEG = pop_select(state.EEG, 'channel', channels_to_select_idx);
     state.EEG = eeg_checkset(state.EEG);
+    log_step(state, meta, R.LogFile, '[select_channels] Channel selection complete.');
 
     out = struct('ChanIdx', channels_to_select_idx);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
+
 end

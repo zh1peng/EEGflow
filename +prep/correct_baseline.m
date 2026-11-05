@@ -63,9 +63,12 @@ function state = correct_baseline(state, args, meta)
         return;
     end
 
+    out = struct();
+    out.baseline_window_ms = R.BaselineWindow;
+
     if isempty(R.BaselineWindow)
         log_step(state, meta, R.LogFile, '[correct_baseline] BaselineWindow is empty, skipping baseline correction.');
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
 
@@ -81,6 +84,5 @@ function state = correct_baseline(state, args, meta)
     state.EEG = eeg_checkset(state.EEG);
     log_step(state, meta, R.LogFile, '[correct_baseline] Baseline correction complete.');
 
-    out = struct('baseline_window_ms', R.BaselineWindow);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

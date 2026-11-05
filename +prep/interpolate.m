@@ -59,6 +59,9 @@ function state = interpolate(state, args, meta)
         return;
     end
 
+    out = struct();
+    out.interpolated_channels = {};
+
     log_step(state, meta, R.LogFile, '[interpolate] Starting channel interpolation.');
 
     if ~isfield(state.EEG, 'urchanlocs') || isempty(state.EEG.urchanlocs)
@@ -71,7 +74,7 @@ function state = interpolate(state, args, meta)
 
     if isempty(chans_to_interp)
         log_step(state, meta, R.LogFile, '[interpolate] Skipping interpolation: No channels to interpolate found.');
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
 
@@ -80,6 +83,6 @@ function state = interpolate(state, args, meta)
     state.EEG = eeg_checkset(state.EEG);
     log_step(state, meta, R.LogFile, '[interpolate] Interpolation complete.');
 
-    out = struct('interpolated_channels', chans_to_interp);
+    out.interpolated_channels = chans_to_interp;
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

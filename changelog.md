@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.8.1 - 2026-11-05
+
+- Restored EEGdojo preprocessing behavior after the state-based migration:
+  - ICA rank/PCA handling, component flagging, weight transfer, brain-probability
+    protection, multichannel ECG detection and diagnostic plots;
+  - relative-marker timing/overwrite behavior, channel selection and rest segmentation;
+  - original parameter defaults/validators and skipped-step output fields.
+- Fixed ICA activation retrieval without overwriting the EEG struct, including
+  ECG detection when EEGLAB activation caching is disabled.
+- Kept JSON input normalization at the configuration boundary.
+- Added the prep migration audit and a direct EEGdojo comparison of all 20
+  operations' 110 parameter defaults and validators.
+- Verified targeted synthetic-data comparisons with MATLAB and EEGLAB; remaining
+  real-data coverage and upstream limitations are documented in
+  `docs/prep_migration_audit.md`.
+
 ## v0.8.0 - 2026-05-27
 
 - Added the generic `+source` source-space reconstruction layer:

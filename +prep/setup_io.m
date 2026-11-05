@@ -233,12 +233,17 @@ function cfgOut = setup_io(cfg, varargin)
             end
 
             % normalize common label fields to cellstr
-            labelFields = {'ExcludeLabel','Chan2remove','KnownBadLabel','EOGLabel','ECGLabel','OtherLabel','Markers'};
+            labelFields = {'ExcludeLabel','Chan2remove','ChanLabels','EOGChanLabel','EOGLabel','ECGLabel','OtherLabel','Markers'};
             for k = 1:numel(labelFields)
                 f = labelFields{k};
                 if isfield(args, f)
                     args.(f) = local_to_cellstr(args.(f));
                 end
+            end
+
+            % JSON numeric vectors are columns; channel indices are row vectors.
+            if isfield(args, 'ChanIdx') && isnumeric(args.ChanIdx)
+                args.ChanIdx = args.ChanIdx(:)';
             end
 
             cfgOut.steps(i).args = args;

@@ -41,7 +41,7 @@ function state = segment_rest(state, args, meta)
 %       Type: numeric; Shape: scalar; Range: >= 0; Default: 0
 %       Seconds trimmed before block end.
 %   - EpochLength
-%       Type: numeric; Shape: scalar; Range: > 0; Default: 2000
+%       Type: numeric; Shape: scalar; Range: > 0; Default: 4000
 %       Epoch length in milliseconds.
 %   - EpochOverlap
 %       Type: numeric; Shape: scalar; Range: >= 0; Default: 0.5
@@ -84,7 +84,7 @@ function state = segment_rest(state, args, meta)
     p.addParameter('BlockDurSec', [], @(x) isempty(x) || (isnumeric(x) && isscalar(x) && x > 0));
     p.addParameter('TrimStartSec', 0, @(x) isnumeric(x) && isscalar(x) && x >= 0);
     p.addParameter('TrimEndSec',   0, @(x) isnumeric(x) && isscalar(x) && x >= 0);
-    p.addParameter('EpochLength',  2000, @(x) isnumeric(x) && isscalar(x) && x > 0);
+    p.addParameter('EpochLength',  4000, @(x) isnumeric(x) && isscalar(x) && x > 0);
     p.addParameter('EpochOverlap', 0.5,  @(x) isnumeric(x) && isscalar(x) && x >= 0 && x < 1);
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
     p.addParameter('PreserveICA', true, @(x) islogical(x) && isscalar(x));
@@ -148,6 +148,7 @@ function state = segment_rest(state, args, meta)
         log_step(state, meta, R.LogFile, '[segment_rest] No start events found. Exiting.');
         out.blocks_found = 0;
         out.epochs_created_total = 0;
+        state.EEG = [];
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
@@ -197,6 +198,7 @@ function state = segment_rest(state, args, meta)
         log_step(state, meta, R.LogFile, '[segment_rest] No valid blocks paired.');
         out.blocks_found = 0;
         out.epochs_created_total = 0;
+        state.EEG = [];
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
@@ -217,6 +219,7 @@ function state = segment_rest(state, args, meta)
     if out.blocks_found == 0
         log_step(state, meta, R.LogFile, '[segment_rest] All blocks too short after trimming.');
         out.epochs_created_total = 0;
+        state.EEG = [];
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
@@ -285,6 +288,7 @@ function state = segment_rest(state, args, meta)
     if isempty(valid_EEG_blocks)
         log_step(state, meta, R.LogFile, '[segment_rest] No epochs generated across all blocks.');
         out.epochs_created_total = 0;
+        state.EEG = [];
         state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
@@ -317,7 +321,8 @@ function state = segment_rest(state, args, meta)
                 EEG_out = recompute_icaact(EEG_out);
                 log_step(state, meta, R.LogFile, '[segment_rest] ICA restored + icaact recomputed on EEG_out.');
             else
-                log_step(state, meta, R.LogFile, '[segment_rest] ICA restored on EEG_out (RecomputeICAAct=OFF).');
+                EEG_out.icaact = [];
+                log_step(state, meta, R.LogFile, '[segment_rest] ICA restored. Skipped icaact recompute (RecomputeICAAct=OFF).');
             end
             EEG_out = eeg_checkset(EEG_out);
         end
@@ -366,10 +371,6 @@ function EEG = recompute_icaact(EEG)
 if ~isfield(EEG, 'icaweights') || isempty(EEG.icaweights) || ...
    ~isfield(EEG, 'icasphere')  || isempty(EEG.icasphere)  || ...
    ~isfield(EEG, 'icachansind')|| isempty(EEG.icachansind)
-    return;
-end
-
-if any(EEG.icachansind < 1) || any(EEG.icachansind > EEG.nbchan)
     return;
 end
 

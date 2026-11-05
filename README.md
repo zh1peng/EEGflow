@@ -88,7 +88,7 @@ Notes:
   - args: Markers (cellstr, default {}), TimeWindow (ms, [start end], default []), LogFile (auto)
 - segment_rest: build rest blocks and fixed-length epochs
   - args: BlockLabel ("EC"), StartCode (10), EndCode ([]), BlockDurSec ([]),
-          TrimStartSec (0), TrimEndSec (0), EpochLength (2000 ms),
+          TrimStartSec (0), TrimEndSec (0), EpochLength (4000 ms),
           EpochOverlap (0.5), LogFile (auto)
 
 ### Cleaning: bad channels and epochs
@@ -96,7 +96,7 @@ Notes:
   - args:
     - ExcludeLabel ({})
     - Action ('remove'|'flag', default 'remove')
-    - KnownBadLabel ({})
+    - KnownBadLabel ([])
     - Kurtosis (false), Kurt_Threshold (5)
     - Probability (false), Prob_Threshold (5)
     - Spectrum (false), Spec_Threshold (5), Spec_FreqRange ([1 50])
@@ -117,7 +117,7 @@ Notes:
     - FilterICAOn (true), FilterICALocutoff (1)
     - ICAType ('runica')
     - ICLabelOn (true), ICLabelThreshold (default matrix)
-    - FASTEROn (true)
+    - FASTEROn (true), BrainIncludeTreshold (0.7)
     - EOGChanLabel ({})
     - DetectECG (true), ECG_Struct ([]), ECGCorrelationThreshold (0.8)
 

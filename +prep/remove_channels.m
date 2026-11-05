@@ -25,7 +25,7 @@ function state = remove_channels(state, args, meta)
 %       Type: numeric; Shape: vector; Default: []
 %       Channel indices to remove.
 %   - Chan2remove
-%       Type: cellstr|char|string; Default: {}
+%       Type: cellstr|char; Default: {}
 %       Channel labels to remove; resolved via chans2idx.
 %   - LogFile
 %       Type: char|string; Default: ''
@@ -57,7 +57,7 @@ function state = remove_channels(state, args, meta)
     p = inputParser;
     p.addRequired('EEG', @isstruct);
     p.addParameter('ChanIdx', [], @(x) isnumeric(x) && isvector(x));
-    p.addParameter('Chan2remove', {}, @(x) iscellstr(x) || ischar(x) || isstring(x));
+    p.addParameter('Chan2remove', {}, @(x) iscellstr(x) || ischar(x));
     p.addParameter('LogFile', '', @(s) ischar(s) || isstring(s));
     nv = state_struct2nv(params);
 
@@ -82,8 +82,8 @@ function state = remove_channels(state, args, meta)
         log_step(state, meta, R.LogFile, sprintf('[remove_channels] Channels to remove by index: %s', num2str(R.ChanIdx)));
     end
     if ~isempty(R.Chan2remove)
-        if ischar(R.Chan2remove) || isstring(R.Chan2remove)
-            R.Chan2remove = cellstr(R.Chan2remove);
+        if ischar(R.Chan2remove)
+            R.Chan2remove = {R.Chan2remove};
         end
         idx_from_labels = chans2idx(state.EEG, R.Chan2remove, 'MustExist', false);
         if ~isempty(idx_from_labels)

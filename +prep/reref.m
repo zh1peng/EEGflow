@@ -22,7 +22,7 @@ function state = reref(state, args, meta)
 %
 % Parameters
 %   - ExcludeLabel
-%       Type: char|string; Default: {}
+%       Type: cell|char; Default: {}
 %       Labels to exclude from the average reference computation.
 %   - LogFile
 %       Type: char; Default: ''
@@ -52,7 +52,7 @@ function state = reref(state, args, meta)
 
     p = inputParser;
     p.addRequired('EEG', @isstruct);
-    p.addParameter('ExcludeLabel', {}, @(x) iscell(x) || ischar(x) || isstring(x));
+    p.addParameter('ExcludeLabel', {}, @(x) iscell(x) || ischar(x));
     p.addParameter('LogFile', '', @ischar);
     nv = state_struct2nv(params);
 
@@ -68,8 +68,8 @@ function state = reref(state, args, meta)
     out = struct();
     out.excluded_labels = R.ExcludeLabel;
 
-    if ischar(R.ExcludeLabel) || isstring(R.ExcludeLabel)
-        excludeLabels = cellstr(R.ExcludeLabel);
+    if ischar(R.ExcludeLabel)
+        excludeLabels = {R.ExcludeLabel};
     else
         excludeLabels = R.ExcludeLabel;
     end

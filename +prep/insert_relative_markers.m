@@ -93,6 +93,8 @@ function state = insert_relative_markers(state, args, meta)
         return;
     end
 
+    EEG = state.EEG;
+
     ReferenceMarker = char(R.ReferenceMarker);
     RefOccurrence   = lower(strtrim(char(R.RefOccurrence)));
     StartOffsetSec  = R.StartOffsetSec;
@@ -106,11 +108,32 @@ function state = insert_relative_markers(state, args, meta)
     if isempty(strtrim(ReferenceMarker))
         error('[insert_relative_markers] ReferenceMarker must be specified.');
     end
+    if ~(strcmp(RefOccurrence,'first') || strcmp(RefOccurrence,'last'))
+        error('[insert_relative_markers] RefOccurrence must be "first" or "last".');
+    end
     if ~isempty(DurationSec) && ~isempty(EndOffsetSec)
-        error('[insert_relative_markers] DurationSec and EndOffsetSec are mutually exclusive.');
+        error('[insert_relative_markers] DurationSec and EndOffsetSec are mutually exclusive. Provide only one.');
     end
 
-    evtype = {state.EEG.event.type};
+    out = struct();
+    out.ref_marker       = ReferenceMarker;
+    out.ref_occurrence   = RefOccurrence;
+    out.ref_sample       = NaN;
+    out.ref_latency_sec  = NaN;
+    out.new_start_marker = strtrim(NewStartMarker);
+    out.new_start_sample = NaN;
+    out.new_start_latency_sec = NaN;
+    out.new_end_marker   = strtrim(NewEndMarker);
+    out.new_end_sample   = NaN;
+    out.new_end_latency_sec = NaN;
+    out.mode             = '';
+
+    if ~isfield(EEG, 'event') || isempty(EEG.event)
+        error('[insert_relative_markers] EEG.event is empty. Cannot insert relative markers without events.');
+    end
+
+    % -------- Normalize event types to char --------
+    evtype = {EEG.event.type};
     for i = 1:numel(evtype)
         if ~(ischar(evtype{i}) || isstring(evtype{i}))
             evtype{i} = num2str(evtype{i});
@@ -118,75 +141,157 @@ function state = insert_relative_markers(state, args, meta)
             evtype{i} = char(evtype{i});
         end
     end
-    lat_all = [state.EEG.event.latency];
+    lat_all = [EEG.event.latency];
 
-    ref_idx = find(strcmp(evtype, ReferenceMarker));
-    if isempty(ref_idx)
-        error('[insert_relative_markers] Reference marker "%s" not found.', ReferenceMarker);
+    % -------- Locate reference marker --------
+    ref_all = find(strcmp(evtype, ReferenceMarker));
+    if isempty(ref_all)
+        error('[insert_relative_markers] Reference marker "%s" not found in EEG events.', ReferenceMarker);
     end
-    if strcmp(RefOccurrence, 'last')
-        ref_idx = ref_idx(end);
+    if strcmp(RefOccurrence, 'first')
+        ref_idx = ref_all(1);
     else
-        ref_idx = ref_idx(1);
+        ref_idx = ref_all(end);
     end
     ref_samp = lat_all(ref_idx);
-    ref_sec  = ref_samp / state.EEG.srate;
 
-    new_start_samp = ref_samp + round(StartOffsetSec * state.EEG.srate);
-    new_start_sec  = new_start_samp / state.EEG.srate;
+    out.ref_sample      = ref_samp;
+    out.ref_latency_sec = (ref_samp - 1) / EEG.srate;
 
-    if ~isempty(DurationSec)
-        new_end_samp = new_start_samp + round(DurationSec * state.EEG.srate);
-    elseif ~isempty(EndOffsetSec)
-        new_end_samp = ref_samp + round(EndOffsetSec * state.EEG.srate);
-    else
-        new_end_samp = [];
-    end
-    if ~isempty(new_end_samp)
-        new_end_sec = new_end_samp / state.EEG.srate;
-    else
-        new_end_sec = [];
-    end
+    log_step(state, meta, LogFile, sprintf('[insert_relative_markers] Reference "%s" (%s) at sample %.0f (%.3fs).', ...
+        ReferenceMarker, RefOccurrence, ref_samp, out.ref_latency_sec));
 
-    if Overwrite
-        if ~isempty(NewStartMarker)
-            state.EEG.event = state.EEG.event(~strcmp(evtype, NewStartMarker));
+    % -------- Compute new start --------
+    hasNewStart = ~isempty(strtrim(NewStartMarker));
+    if hasNewStart
+        start_samp = round(ref_samp + StartOffsetSec * EEG.srate);
+
+        if start_samp < 1 || start_samp > EEG.pnts
+            error('[insert_relative_markers] New start sample %d out of bounds [1, %d]. Check StartOffsetSec.', start_samp, EEG.pnts);
         end
-        if ~isempty(NewEndMarker)
-            state.EEG.event = state.EEG.event(~strcmp(evtype, NewEndMarker));
-        end
-    end
 
-    if ~isempty(NewStartMarker)
-        state.EEG.event(end+1).type = NewStartMarker;
-        state.EEG.event(end).latency = new_start_samp;
-    end
-    if ~isempty(NewEndMarker) && ~isempty(new_end_samp)
-        state.EEG.event(end+1).type = NewEndMarker;
-        state.EEG.event(end).latency = new_end_samp;
-    end
-
-    state.EEG = eeg_checkset(state.EEG, 'eventconsistency');
-
-    out = struct();
-    out.ref_marker = ReferenceMarker;
-    out.ref_occurrence = RefOccurrence;
-    out.ref_sample = ref_samp;
-    out.ref_latency_sec = ref_sec;
-    out.new_start_marker = NewStartMarker;
-    out.new_start_sample = new_start_samp;
-    out.new_start_latency_sec = new_start_sec;
-    out.new_end_marker = NewEndMarker;
-    out.new_end_sample = new_end_samp;
-    out.new_end_latency_sec = new_end_sec;
-    if ~isempty(DurationSec)
-        out.mode = 'ref+startOffset+duration';
-    elseif ~isempty(EndOffsetSec)
-        out.mode = 'ref+startOffset+endOffset';
-    else
+        out.new_start_sample      = start_samp;
+        out.new_start_latency_sec = (start_samp - 1) / EEG.srate;
         out.mode = 'ref+startOffset';
+
+        log_step(state, meta, LogFile, sprintf('[insert_relative_markers] New start "%s" at ref + %.3fs -> sample %d (%.3fs).', ...
+            NewStartMarker, StartOffsetSec, start_samp, out.new_start_latency_sec));
+    else
+        start_samp = NaN;
+        log_step(state, meta, LogFile, '[insert_relative_markers] NewStartMarker is empty, skipping start marker insertion.');
     end
 
-    log_step(state, meta, LogFile, sprintf('[insert_relative_markers] Inserted markers: start=%s end=%s', NewStartMarker, NewEndMarker));
+    % -------- Compute new end --------
+    hasNewEnd = ~isempty(strtrim(NewEndMarker));
+    end_samp  = NaN;
+
+    if hasNewEnd
+        if ~isempty(DurationSec)
+            if ~hasNewStart
+                error('[insert_relative_markers] DurationSec requires NewStartMarker (cannot define end from start if start insertion is skipped).');
+            end
+            end_samp = round(start_samp + DurationSec * EEG.srate);
+            out.mode = 'ref+startOffset + duration';
+            log_step(state, meta, LogFile, sprintf('[insert_relative_markers] End defined as start + %.3fs -> sample %d.', DurationSec, end_samp));
+
+        elseif ~isempty(EndOffsetSec)
+            end_samp = round(ref_samp + EndOffsetSec * EEG.srate);
+            out.mode = 'ref+startOffset + refEndOffset';
+            log_step(state, meta, LogFile, sprintf('[insert_relative_markers] End defined as ref + %.3fs -> sample %d.', EndOffsetSec, end_samp));
+
+        else
+            log_step(state, meta, LogFile, '[insert_relative_markers] Neither DurationSec nor EndOffsetSec provided; skipping end marker insertion.');
+            hasNewEnd = false;
+        end
+
+        if hasNewEnd
+            if end_samp < 1 || end_samp > EEG.pnts
+                error('[insert_relative_markers] New end sample %d out of bounds [1, %d]. Check DurationSec/EndOffsetSec.', end_samp, EEG.pnts);
+            end
+            if hasNewStart && ~(out.new_start_sample < end_samp)
+                error('[insert_relative_markers] Invalid window: new start (%d) >= new end (%d).', out.new_start_sample, end_samp);
+            end
+
+            out.new_end_sample      = end_samp;
+            out.new_end_latency_sec = (end_samp - 1) / EEG.srate;
+
+            log_step(state, meta, LogFile, sprintf('[insert_relative_markers] New end "%s" at sample %d (%.3fs).', ...
+                NewEndMarker, end_samp, out.new_end_latency_sec));
+        end
+    else
+        log_step(state, meta, LogFile, '[insert_relative_markers] NewEndMarker is empty, skipping end marker insertion.');
+    end
+
+    % -------- Optionally remove existing markers of same labels --------
+    if Overwrite
+        rm_types = {};
+        if hasNewStart, rm_types{end+1} = strtrim(NewStartMarker); end %#ok<AGROW>
+        if hasNewEnd,   rm_types{end+1} = strtrim(NewEndMarker);   end %#ok<AGROW>
+
+        if ~isempty(rm_types)
+            keep = true(1, numel(EEG.event));
+            for k = 1:numel(rm_types)
+                keep = keep & ~strcmp(evtype, rm_types{k});
+            end
+            if any(~keep)
+                log_step(state, meta, LogFile, sprintf('[insert_relative_markers] OverwriteExisting=true: removing %d existing event(s) with labels: %s', ...
+                    sum(~keep), strjoin(rm_types, ', ')));
+                EEG.event = EEG.event(keep);
+            end
+        end
+    end
+
+    % -------- Build event templates (preserve fieldnames) --------
+    tmpl = EEG.event(1);
+    fn = fieldnames(tmpl);
+
+    make_event = @(label, samp) local_make_event(fn, label, samp);
+
+    % -------- Insert events --------
+    n_added = 0;
+
+    if hasNewStart
+        EEG.event(end+1) = make_event(strtrim(NewStartMarker), out.new_start_sample);
+        n_added = n_added + 1;
+    end
+    if hasNewEnd
+        EEG.event(end+1) = make_event(strtrim(NewEndMarker), out.new_end_sample);
+        n_added = n_added + 1;
+    end
+
+    if n_added == 0
+        log_step(state, meta, LogFile, '[insert_relative_markers] No markers inserted (nothing to do).');
+        EEG = eeg_checkset(EEG);
+        state.EEG = EEG;
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
+        return;
+    end
+
+    % -------- Sort events by latency and check consistency --------
+    [~, ord] = sort([EEG.event.latency]);
+    EEG.event = EEG.event(ord);
+
+    EEG = eeg_checkset(EEG, 'eventconsistency');
+
+    log_step(state, meta, LogFile, sprintf('[insert_relative_markers] Inserted %d marker(s). Event consistency check complete.', n_added));
+    state.EEG = EEG;
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
+end
+
+% ---- local helper: create event struct with same fields as EEG.event(1) ----
+function ev = local_make_event(fn, label, samp)
+    ev = struct();
+    for ii = 1:numel(fn)
+        field = fn{ii};
+        if strcmp(field, 'duration')
+            ev.(field) = 0; % Explicitly set duration to 0 for instantaneous events
+        elseif strcmp(field, 'urevent')
+            % obscure edge case: ensure it is empty to prevent linking to wrong raw event
+            ev.(field) = [];
+        else
+            ev.(field) = [];
+        end
+    end
+    ev.type    = label;
+    ev.latency = double(samp);
 end

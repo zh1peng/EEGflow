@@ -71,6 +71,10 @@ function state = filter(state, args, meta)
         return;
     end
 
+    out = struct();
+    out.LowCutoff = R.LowCutoff;
+    out.HighCutoff = R.HighCutoff;
+
     log_step(state, meta, R.LogFile, '[filter] Starting filtering process.');
 
     if R.LowCutoff > 0 && R.HighCutoff > 0 && R.LowCutoff >= R.HighCutoff
@@ -79,7 +83,7 @@ function state = filter(state, args, meta)
     end
     if R.LowCutoff < 0 && R.HighCutoff < 0
         log_step(state, meta, R.LogFile, '[filter] No valid filter frequencies provided. Skipping filtering.');
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
 
@@ -93,6 +97,5 @@ function state = filter(state, args, meta)
     end
 
     log_step(state, meta, R.LogFile, '[filter] Filtering complete.');
-    out = struct('LowCutoff', R.LowCutoff, 'HighCutoff', R.HighCutoff);
     state = state_update_history(state, op, state_strip_eeg_param(R), 'success', out);
 end

@@ -71,7 +71,7 @@ function state = segment_task(state, args, meta)
 
     if isempty(R.Markers) || isempty(R.TimeWindow)
         log_step(state, meta, R.LogFile, '[segment_task] Markers or TimeWindow is empty, skipping task segmentation.');
-        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', struct());
+        state = state_update_history(state, op, state_strip_eeg_param(R), 'skipped', out);
         return;
     end
 
