@@ -12,6 +12,7 @@ This README focuses on preprocessing. It is written to be friendly to humans and
 - Resting-state features (`+rest`): `docs/rest.md`
 - ERP analysis (`+analysis`): `docs/erp.md`
 - Time-frequency analysis (`+analysis`): `docs/tf.md`
+- Movie data, QC, CorrCA/ISC, RSA and CP (`+movie`): `docs/movie.md`
 
 ----------------------------------------------------------------------
 ## Prep design logic (quick mental model)

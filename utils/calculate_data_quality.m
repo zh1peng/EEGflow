@@ -18,6 +18,12 @@ function quality = calculate_data_quality(EEG, varargin)
 %                 those functions.
 %
 % Optional Parameters (Name-Value Pairs):
+%   'qc_locutoff' - (scalar or [], default: [])
+%                  Optional high-pass in Hz on a local copy before calculating
+%                  all signal-based metrics. [] or 0 disables filtering.
+%                  Use 1 for standalone QC; leave disabled when the caller has
+%                  already filtered its QC copy. The input EEG is not changed.
+%
 %   'line_freqs' - (numeric array, default: [50, 60])
 %                  The line frequencies (e.g., 50 Hz, 60 Hz) for which to calculate
 %                  power. The function will produce a separate metric for each.
@@ -105,6 +111,8 @@ function quality = calculate_data_quality(EEG, varargin)
 %% ---- Parse Name-Value inputs
 p = inputParser;
 p.FunctionName = 'calculate_data_quality';
+addParameter(p, 'qc_locutoff', [], @(x) isempty(x) || ...
+    (isnumeric(x) && isscalar(x) && isfinite(x) && x >= 0));
 addParameter(p, 'line_freqs', [50,60], @isnumeric);
 addParameter(p, 'clean_maxbadchan', 0.2, @isnumeric);
 addParameter(p, 'clean_powertol', [-3.5, 5], @isnumeric);
@@ -113,6 +121,12 @@ addParameter(p, 'clean_winov', 0.66, @isnumeric);
 addParameter(p, 'chan_exclude', {}, @iscellstr);
 parse(p, varargin{:});
 opt = p.Results;
+
+% Optional QC-only filtering; callers that already filter keep the default [].
+if ~isempty(opt.qc_locutoff) && opt.qc_locutoff > 0
+    EEG = pop_eegfiltnew(EEG, 'locutoff', opt.qc_locutoff);
+    EEG = eeg_checkset(EEG);
+end
 
 quality = struct();
 

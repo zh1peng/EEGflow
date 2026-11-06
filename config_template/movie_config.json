@@ -1,0 +1,29 @@
+{
+  "steps": [
+    {
+      "op": "collect_segments",
+      "args": {
+        "study_path": "PATH_TO_PREPROCESSED_SET_FILES",
+        "subject_parser": "(?<sub>sub-[^_]+)",
+        "StartMarker": "video_start",
+        "EndMarker": "video_stop",
+        "check_quality": true
+      }
+    },
+    {
+      "op": "qc_filter",
+      "args": {
+        "metrics_to_analyze": ["percent_retained_by_windows"],
+        "thresholds": {"percent_retained_by_windows": 85},
+        "filter_data": true
+      }
+    },
+    {"op": "run_corrca", "args": {"shrinkage": 0.1}},
+    {"op": "compute_isc", "args": {"component": 1, "pairwise": true}},
+    {
+      "op": "test_isc",
+      "args": {"component": 1, "nPerm": 1000, "randomSeed": 42, "parallel": false}
+    },
+    {"op": "plot_isc_test", "args": {}}
+  ]
+}

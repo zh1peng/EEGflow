@@ -81,3 +81,9 @@ Reference/environment issues are not silently repaired here:
   MATLAB R2025b when the affected crop branch is reached. Both toolboxes are
   affected. Rest comparisons used a full-length block to avoid that branch;
   the external dependency was not modified.
+
+Follow-up (2026-11-05): at the user's explicit request, the installed EEGLAB
+`eegrej.m:139` was changed to `iRegion1+1:size(regions,1)`. The movie regression
+now checks actual interior cropping, shifted events and the full six-step
+movie pipeline; these pass. The rest comparisons above describe the earlier
+audit and have not been rerun as part of this movie-specific verification.

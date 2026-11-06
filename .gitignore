@@ -5,4 +5,5 @@
 !/test/analysis_erp_subject_contrast_test.m
 !/test/analysis_erp_cluster_stats_test.m
 !/test/prep_migration_defaults_test.m
+!/test/movie_module_test.m
 /discover-eeg-master/*

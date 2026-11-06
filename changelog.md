@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.9.0 - 2026-11-06
+
+- Added the audited `+movie` module with 24 functions for segment collection,
+  QC, CorrCA, ISC, similarity analysis, RSA, feature resampling and CP decomposition.
+- Added a JSON pipeline example and regression tests. Length QC uses the EEG
+  sample count that entered the time-frequency transform.
+- Documented the EEGdojo comparison, intentional numerical differences and
+  known limitations in `docs/movie.md`.
+
 ## v0.8.1 - 2026-11-05
 
 - Restored EEGdojo preprocessing behavior after the state-based migration:
